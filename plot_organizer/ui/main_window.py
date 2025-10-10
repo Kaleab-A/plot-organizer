@@ -6,9 +6,10 @@ from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QFileDi
 
 from plot_organizer.ui.grid_board import GridBoard, PlotTile
 from plot_organizer.ui.data_manager import DataManagerDock
-from plot_organizer.ui.dialogs import QuickPlotDialog, PlotSettingsDialog
+from plot_organizer.ui.dialogs import QuickPlotDialog, PlotSettingsDialog, ExportDialog
 from plot_organizer.services.load_service import load_csv_to_datasource
 from plot_organizer.services.plot_service import expand_groups, shared_limits
+from plot_organizer.services.export_service import export_grid
 
 
 class MainWindow(QMainWindow):
@@ -70,6 +71,11 @@ class MainWindow(QMainWindow):
         remove_col.triggered.connect(self._action_remove_col)
         grid_menu.addAction(remove_row)
         grid_menu.addAction(remove_col)
+        
+        export_menu = menubar.addMenu("Export")
+        export_grid_action = QAction("Export Grid...", self)
+        export_grid_action.triggered.connect(self._action_export_grid)
+        export_menu.addAction(export_grid_action)
 
     # actions
     def _action_add_csv(self) -> None:
@@ -261,5 +267,63 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(self, "Success", f"Column {col} removed.")
             else:
                 QMessageBox.warning(self, "Cannot Remove", "Column contains non-empty plots. Clear them first.")
+    
+    def _action_export_grid(self) -> None:
+        """Export the grid layout to a file."""
+        # Check if there are any plots
+        has_plots = False
+        for r in range(self.grid_board._rows):
+            for c in range(self.grid_board._cols):
+                tile = self.grid_board.tile_at(r, c)
+                if tile and not tile.is_empty():
+                    has_plots = True
+                    break
+            if has_plots:
+                break
+        
+        if not has_plots:
+            QMessageBox.information(self, "No Plots", "Add some plots to the grid before exporting.")
+            return
+        
+        # Show export dialog
+        dlg = ExportDialog(self)
+        if dlg.exec() != QDialog.Accepted:
+            return
+        
+        settings = dlg.get_settings()
+        if not settings:
+            return
+        
+        # Get output file path
+        fmt = settings["format"]
+        filters = {
+            "pdf": "PDF Files (*.pdf)",
+            "svg": "SVG Files (*.svg)",
+            "eps": "EPS Files (*.eps)",
+            "png": "PNG Files (*.png)",
+        }
+        
+        out_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Export",
+            f"grid_export.{fmt}",
+            filters.get(fmt, "All Files (*)")
+        )
+        
+        if not out_path:
+            return
+        
+        # Perform export
+        try:
+            export_grid(
+                self.grid_board,
+                out_path,
+                fmt=fmt,
+                width_in=settings["width"],
+                height_in=settings["height"],
+                dpi=settings["dpi"],
+            )
+            QMessageBox.information(self, "Export Successful", f"Grid exported to:\n{out_path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Error", f"Failed to export grid:\n{str(e)}")
 
 

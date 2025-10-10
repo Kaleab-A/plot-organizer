@@ -2,7 +2,7 @@
 
 _Last updated: 2025-10-10_
 
-## ✅ Now Working (v0.3.1)
+## ✅ Now Working (v0.4)
 
 **Full control over plot positioning, spanning, and grid management with smart swapping!**
 
@@ -16,6 +16,7 @@ _Last updated: 2025-10-10_
 - **Context Menu**: Right-click plots for settings and clear options.
 - **Grid Management**: Add rows/cols via Grid menu; remove empty rows/cols with safety checks.
 - **Clear Plots**: Remove plot data from cells (with confirmation).
+- **Export**: Export → Export Grid… saves entire layout to PDF/SVG/EPS/PNG with configurable size and DPI.
 - **Clean UI**: Plots now take maximum space with minimal margins.
 
 ## Implemented (v1 groundwork)

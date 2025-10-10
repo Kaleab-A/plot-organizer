@@ -14,6 +14,10 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QSpinBox,
     QGroupBox,
+    QDoubleSpinBox,
+    QRadioButton,
+    QButtonGroup,
+    QHBoxLayout,
 )
 
 
@@ -173,11 +177,12 @@ class PlotSettingsDialog(QDialog):
         span_group.setLayout(span_layout)
         layout.addWidget(span_group)
         
-        # Connect signals to detect changes
-        self.row_spin.valueChanged.connect(self._on_position_changed)
-        self.col_spin.valueChanged.connect(self._on_position_changed)
-        self.rowspan_spin.valueChanged.connect(self._on_span_changed)
-        self.colspan_spin.valueChanged.connect(self._on_span_changed)
+        # Connect signals to detect changes (use Qt.QueuedConnection to avoid recursion)
+        from PySide6.QtCore import Qt as QtCore
+        self.row_spin.valueChanged.connect(self._on_position_changed, QtCore.QueuedConnection)
+        self.col_spin.valueChanged.connect(self._on_position_changed, QtCore.QueuedConnection)
+        self.rowspan_spin.valueChanged.connect(self._on_span_changed, QtCore.QueuedConnection)
+        self.colspan_spin.valueChanged.connect(self._on_span_changed, QtCore.QueuedConnection)
         
         # Buttons
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=self)
@@ -187,19 +192,35 @@ class PlotSettingsDialog(QDialog):
     
     def _on_position_changed(self) -> None:
         """Lock span controls when position changes."""
+        if not hasattr(self, '_updating'):
+            self._updating = False
+        if self._updating:
+            return
+        self._updating = True
+        
         pos_changed = (self.row_spin.value() != self._initial_row or 
                       self.col_spin.value() != self._initial_col)
         if pos_changed:
             self.rowspan_spin.setEnabled(False)
             self.colspan_spin.setEnabled(False)
+        
+        self._updating = False
     
     def _on_span_changed(self) -> None:
         """Lock position controls when span changes."""
+        if not hasattr(self, '_updating'):
+            self._updating = False
+        if self._updating:
+            return
+        self._updating = True
+        
         span_changed = (self.rowspan_spin.value() != self._initial_rowspan or 
                        self.colspan_spin.value() != self._initial_colspan)
         if span_changed:
             self.row_spin.setEnabled(False)
             self.col_spin.setEnabled(False)
+        
+        self._updating = False
     
     def _validate_and_accept(self) -> None:
         """Validate that only position OR span changed, not both."""
@@ -235,6 +256,139 @@ class PlotSettingsDialog(QDialog):
             "colspan": self.colspan_spin.value(),
             "position_changed": pos_changed,
             "span_changed": span_changed,
+        }
+
+
+class ExportDialog(QDialog):
+    """Dialog to configure grid export settings."""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Export Grid")
+        
+        layout = QVBoxLayout(self)
+        
+        # Format group
+        format_group = QGroupBox("Export Format")
+        format_layout = QVBoxLayout()
+        
+        self.format_group = QButtonGroup(self)
+        self.pdf_radio = QRadioButton("PDF (vector)")
+        self.svg_radio = QRadioButton("SVG (vector)")
+        self.eps_radio = QRadioButton("EPS (vector)")
+        self.png_radio = QRadioButton("PNG (raster)")
+        
+        self.format_group.addButton(self.pdf_radio, 0)
+        self.format_group.addButton(self.svg_radio, 1)
+        self.format_group.addButton(self.eps_radio, 2)
+        self.format_group.addButton(self.png_radio, 3)
+        
+        self.pdf_radio.setChecked(True)
+        
+        format_layout.addWidget(self.pdf_radio)
+        format_layout.addWidget(self.svg_radio)
+        format_layout.addWidget(self.eps_radio)
+        format_layout.addWidget(self.png_radio)
+        
+        format_group.setLayout(format_layout)
+        layout.addWidget(format_group)
+        
+        # Size group
+        size_group = QGroupBox("Page Size")
+        size_layout = QFormLayout()
+        
+        # Preset selector
+        self.preset_combo = QComboBox(self)
+        self.preset_combo.addItem("A4 (8.27 × 11.69 inches)", "a4")
+        self.preset_combo.addItem("Letter (8.5 × 11 inches)", "letter")
+        self.preset_combo.addItem("Custom", "custom")
+        size_layout.addRow("Preset:", self.preset_combo)
+        
+        # Custom dimensions
+        self.width_spin = QDoubleSpinBox(self)
+        self.width_spin.setMinimum(1.0)
+        self.width_spin.setMaximum(100.0)
+        self.width_spin.setValue(11.0)
+        self.width_spin.setSuffix(" inches")
+        self.width_spin.setEnabled(False)
+        size_layout.addRow("Width:", self.width_spin)
+        
+        self.height_spin = QDoubleSpinBox(self)
+        self.height_spin.setMinimum(1.0)
+        self.height_spin.setMaximum(100.0)
+        self.height_spin.setValue(8.5)
+        self.height_spin.setSuffix(" inches")
+        self.height_spin.setEnabled(False)
+        size_layout.addRow("Height:", self.height_spin)
+        
+        size_group.setLayout(size_layout)
+        layout.addWidget(size_group)
+        
+        # DPI group (for PNG only)
+        self.dpi_group = QGroupBox("Resolution (PNG only)")
+        dpi_layout = QFormLayout()
+        
+        self.dpi_spin = QSpinBox(self)
+        self.dpi_spin.setMinimum(72)
+        self.dpi_spin.setMaximum(600)
+        self.dpi_spin.setValue(150)
+        self.dpi_spin.setSuffix(" DPI")
+        self.dpi_spin.setEnabled(False)
+        dpi_layout.addRow("DPI:", self.dpi_spin)
+        
+        self.dpi_group.setLayout(dpi_layout)
+        layout.addWidget(self.dpi_group)
+        
+        # Connect signals
+        self.preset_combo.currentIndexChanged.connect(self._on_preset_changed)
+        self.png_radio.toggled.connect(self._on_format_changed)
+        
+        # Buttons
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=self)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+    
+    def _on_preset_changed(self) -> None:
+        """Handle preset selection changes."""
+        preset = self.preset_combo.currentData()
+        if preset == "a4":
+            self.width_spin.setValue(8.27)
+            self.height_spin.setValue(11.69)
+            self.width_spin.setEnabled(False)
+            self.height_spin.setEnabled(False)
+        elif preset == "letter":
+            self.width_spin.setValue(8.5)
+            self.height_spin.setValue(11.0)
+            self.width_spin.setEnabled(False)
+            self.height_spin.setEnabled(False)
+        else:  # custom
+            self.width_spin.setEnabled(True)
+            self.height_spin.setEnabled(True)
+    
+    def _on_format_changed(self) -> None:
+        """Enable/disable DPI based on format."""
+        self.dpi_spin.setEnabled(self.png_radio.isChecked())
+    
+    def get_settings(self) -> Optional[dict]:
+        if self.result() != QDialog.Accepted:
+            return None
+        
+        # Determine format
+        if self.pdf_radio.isChecked():
+            fmt = "pdf"
+        elif self.svg_radio.isChecked():
+            fmt = "svg"
+        elif self.eps_radio.isChecked():
+            fmt = "eps"
+        else:
+            fmt = "png"
+        
+        return {
+            "format": fmt,
+            "width": self.width_spin.value(),
+            "height": self.height_spin.value(),
+            "dpi": self.dpi_spin.value() if fmt == "png" else 150,
         }
 
 

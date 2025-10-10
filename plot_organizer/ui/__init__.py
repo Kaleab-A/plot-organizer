@@ -1,7 +1,7 @@
 from .main_window import MainWindow
 from .grid_board import GridBoard
 from .data_manager import DataManagerDock
-from .dialogs import QuickPlotDialog, PlotSettingsDialog
+from .dialogs import QuickPlotDialog, PlotSettingsDialog, ExportDialog
 
 __all__ = [
     "MainWindow",
@@ -9,6 +9,7 @@ __all__ = [
     "DataManagerDock",
     "QuickPlotDialog",
     "PlotSettingsDialog",
+    "ExportDialog",
 ]
 
 
