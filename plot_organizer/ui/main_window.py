@@ -8,6 +8,7 @@ from plot_organizer.ui.grid_board import GridBoard
 from plot_organizer.ui.data_manager import DataManagerDock
 from plot_organizer.ui.dialogs import QuickPlotDialog
 from plot_organizer.services.load_service import load_csv_to_datasource
+from plot_organizer.services.plot_service import expand_groups, shared_limits
 
 
 class MainWindow(QMainWindow):
@@ -96,17 +97,54 @@ class MainWindow(QMainWindow):
         ds = self._datasources.get(sel["datasource_id"])  # type: ignore[assignment]
         if ds is None:
             return
-        coord = self.grid_board.first_empty_coord()
-        if coord is None:
-            self.grid_board.add_row()
-            coord = (self.grid_board._rows - 1, 0)
-        tile = self.grid_board.tile_at(*coord)
-        tile.set_plot(
-            df=ds.dataframe,  # type: ignore[attr-defined]
-            x=sel["x"],
-            y=sel["y"],
-            hue=sel["hue"],
-            title=self._ds_names.get(sel["datasource_id"], None),
-        )
+        
+        df = ds.dataframe  # type: ignore[attr-defined]
+        x, y, hue = sel["x"], sel["y"], sel["hue"]
+        groups = sel.get("groups", [])
+        
+        # Expand groups to create multiple plots
+        try:
+            filter_queries = expand_groups(df, groups)
+        except ValueError as e:
+            QMessageBox.warning(self, "Too Many Combinations", str(e))
+            return
+        
+        # Compute shared axes if groups present
+        xlim, ylim = None, None
+        if len(filter_queries) > 1:
+            subsets = []
+            for fq in filter_queries:
+                subset = df
+                for col, val in fq.items():
+                    subset = subset[subset[col] == val]
+                subsets.append(subset)
+            xlim, ylim = shared_limits(subsets, x, y)
+        
+        # Place plots in grid
+        for fq in filter_queries:
+            coord = self.grid_board.first_empty_coord()
+            if coord is None:
+                self.grid_board.add_row()
+                coord = (self.grid_board._rows - 1, 0)
+            
+            tile = self.grid_board.tile_at(*coord)
+            
+            # Build title from filter query
+            if fq:
+                title_parts = [f"{k}={v}" for k, v in fq.items()]
+                title = ", ".join(title_parts)
+            else:
+                title = None
+            
+            tile.set_plot(
+                df=df,
+                x=x,
+                y=y,
+                hue=hue,
+                title=title,
+                filter_query=fq,
+                xlim=xlim,
+                ylim=ylim,
+            )
 
 

@@ -29,35 +29,47 @@ python -m plot_organizer.app
      - **x**: e.g., `Founded` (year)
      - **y**: e.g., `Number of employees`
      - **hue** (optional): e.g., `Country` (will color lines by category)
+     - **Groups** (optional): Multi-select columns to create faceted plots (one plot per unique combination)
    - Click **OK**
-   - The plot will appear in the first empty grid tile
+   - The plot(s) will appear in the grid tiles
 
 3. **Interact with Plots**:
-   - Use the toolbar below each plot to pan, zoom, or save
+   - Plots now take maximum space with clean minimal UI
    - Each tile has its own independent Matplotlib canvas
 
 4. **Grow the Grid**:
    - Click **Grid → + Row** or **Grid → + Col** to add more space for plots
+   - Plots automatically place in the first empty tile
 
 ## Example with Test Data
 
 Using `organizations-10000.csv`:
+
+**Simple plot:**
 - **x**: `Founded` → shows timeline
 - **y**: `Number of employees` → shows company size
-- **hue**: Leave blank for a single line, or try `Industry` (note: many categories!)
+- **hue**: Leave blank for a single line
+
+**Faceted plot (groups):**
+- **x**: `Index`
+- **y**: `Number of employees`
+- **Groups**: Select `Country` (will create one plot per country, up to 50)
+- All plots will share the same axis ranges for easy comparison
 
 ## What's Implemented
 
 ✅ CSV loading with automatic type inference  
-✅ Quick Plot dialog (x, y, hue)  
-✅ Matplotlib canvas with toolbar in each tile  
+✅ Plot dialog with x, y, hue, and groups  
+✅ Group faceting (multi-select columns, cross-product expansion)  
+✅ Shared axes across grouped plots (automatic)  
+✅ Clean UI with maximized plot space  
 ✅ Dynamic grid growth  
 
 ## Coming Soon
 
-- Group faceting (create multiple plots from one spec)
-- Shared axes across grouped plots
 - Drag-and-drop to rearrange plots
 - Whole-grid export to PDF/SVG/PNG
 - Project save/load
+- Advanced NA handling wizard
+- Type confirmation dialog
 

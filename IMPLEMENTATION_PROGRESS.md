@@ -2,13 +2,15 @@
 
 _Last updated: 2025-10-10_
 
-## ✅ Now Working (v0.1)
+## ✅ Now Working (v0.2)
 
-**You can now load a CSV and create plots!**
+**You can now load a CSV, create plots, and use group faceting!**
 
 - **CSV Loading**: Data → Add CSV… loads a file, infers column types, and adds it to the Data Sources dock.
-- **Quick Plot**: Plot → Quick Plot… lets you pick a data source, x/y columns, and optional hue, then renders a line plot into the first empty grid tile.
-- **Matplotlib Integration**: Each `PlotTile` embeds a `FigureCanvasQTAgg` with a navigation toolbar (pan, zoom, save).
+- **Plot Creation**: Plot → Quick Plot… lets you pick a data source, x/y columns, optional hue, and groups for faceting.
+- **Group Faceting**: Multi-select group columns to create multiple plots (one per unique combination), capped at 50 combinations.
+- **Shared Axes**: When using groups, all generated plots share the same x/y axis limits for easy comparison.
+- **Clean UI**: Plots now take maximum space with minimal margins; navigation toolbar and header labels removed.
 - **Grid Operations**: Grid → +Row / +Col dynamically grows the grid.
 
 ## Implemented (v1 groundwork)

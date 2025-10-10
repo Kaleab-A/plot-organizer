@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
 )
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 import pandas as pd
 
@@ -27,34 +26,62 @@ class PlotTile(QFrame):
         self._x: Optional[str] = None
         self._y: Optional[str] = None
         self._hue: Optional[str] = None
+        self._filter_query: Optional[dict] = None
 
         layout = QVBoxLayout(self)
-        self.header = QLabel("Empty", self)
-        self.header.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        layout.addWidget(self.header)
+        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSpacing(0)
 
-        self.figure = Figure(figsize=(4, 3))
+        self.figure = Figure(figsize=(4, 3), tight_layout=True)
         self.canvas = FigureCanvas(self.figure)
-        self.toolbar = NavigationToolbar(self.canvas, self)
-        layout.addWidget(self.toolbar)
         layout.addWidget(self.canvas)
 
     def is_empty(self) -> bool:
         return self._df is None
 
-    def set_plot(self, df: pd.DataFrame, x: str, y: str, hue: Optional[str] = None, title: Optional[str] = None) -> None:
+    def set_plot(
+        self, 
+        df: pd.DataFrame, 
+        x: str, 
+        y: str, 
+        hue: Optional[str] = None, 
+        title: Optional[str] = None,
+        filter_query: Optional[dict] = None,
+        xlim: Optional[tuple[float, float]] = None,
+        ylim: Optional[tuple[float, float]] = None,
+    ) -> None:
         self._df, self._x, self._y, self._hue = df, x, y, hue
-        self.header.setText(title or f"{y} vs {x}")
+        self._filter_query = filter_query
+        
+        # Apply filter if provided
+        plot_df = df
+        if filter_query:
+            for col, val in filter_query.items():
+                plot_df = plot_df[plot_df[col] == val]
+        
         ax = self.figure.subplots()
         ax.clear()
-        if hue:
-            for key, sub in df.groupby(hue):
+        
+        if plot_df.empty:
+            ax.text(0.5, 0.5, "No data", ha='center', va='center', transform=ax.transAxes, alpha=0.3)
+        elif hue:
+            for key, sub in plot_df.groupby(hue):
                 ax.plot(sub[x], sub[y], label=str(key))
-            ax.legend(loc="best")
+            ax.legend(loc="best", fontsize='small')
         else:
-            ax.plot(df[x], df[y])
-        ax.set_xlabel(x)
-        ax.set_ylabel(y)
+            ax.plot(plot_df[x], plot_df[y])
+        
+        if title:
+            ax.set_title(title, fontsize='small', pad=2)
+        ax.set_xlabel(x, fontsize='small')
+        ax.set_ylabel(y, fontsize='small')
+        ax.tick_params(labelsize='small')
+        
+        if xlim:
+            ax.set_xlim(xlim)
+        if ylim:
+            ax.set_ylim(ylim)
+        
         self.canvas.draw_idle()
 
 
