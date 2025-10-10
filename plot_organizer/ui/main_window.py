@@ -118,6 +118,8 @@ class MainWindow(QMainWindow):
         x, y, hue = sel["x"], sel["y"], sel["hue"]
         sem_column = sel.get("sem_column")
         groups = sel.get("groups", [])
+        hlines = sel.get("hlines", [])
+        vlines = sel.get("vlines", [])
         
         # Expand groups to create multiple plots
         try:
@@ -129,13 +131,19 @@ class MainWindow(QMainWindow):
         # Compute shared axes if groups present
         xlim, ylim = None, None
         if len(filter_queries) > 1:
-            subsets = []
-            for fq in filter_queries:
-                subset = df
-                for col, val in fq.items():
-                    subset = subset[subset[col] == val]
-                subsets.append(subset)
-            xlim, ylim = shared_limits(subsets, x, y)
+            if sem_column:
+                # Use SEM-aware limits calculation
+                from plot_organizer.services.plot_service import shared_limits_with_sem
+                xlim, ylim = shared_limits_with_sem(df, filter_queries, x, y, sem_column, hue)
+            else:
+                # Use original limits calculation
+                subsets = []
+                for fq in filter_queries:
+                    subset = df
+                    for col, val in fq.items():
+                        subset = subset[subset[col] == val]
+                    subsets.append(subset)
+                xlim, ylim = shared_limits(subsets, x, y)
         
         # Place plots in grid
         for fq in filter_queries:
@@ -163,6 +171,8 @@ class MainWindow(QMainWindow):
                 filter_query=fq,
                 xlim=xlim,
                 ylim=ylim,
+                hlines=hlines,
+                vlines=vlines,
             )
             # Connect signals for new tiles
             tile.settings_requested.connect(self._on_tile_settings)

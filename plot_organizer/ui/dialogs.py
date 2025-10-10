@@ -18,6 +18,8 @@ from PySide6.QtWidgets import (
     QRadioButton,
     QButtonGroup,
     QHBoxLayout,
+    QLineEdit,
+    QPushButton,
 )
 
 
@@ -65,6 +67,29 @@ class QuickPlotDialog(QDialog):
         
         self.combo_count_label = QLabel("")
         layout.addWidget(self.combo_count_label)
+        
+        # Reference lines section
+        ref_lines_group = QGroupBox("Reference Lines (optional)")
+        ref_lines_layout = QVBoxLayout()
+        
+        # Horizontal lines
+        h_layout = QHBoxLayout()
+        h_layout.addWidget(QLabel("Horizontal (y-values, comma-separated):"))
+        self.hlines_input = QLineEdit(self)
+        self.hlines_input.setPlaceholderText("e.g., 0, 50, 100")
+        h_layout.addWidget(self.hlines_input)
+        ref_lines_layout.addLayout(h_layout)
+        
+        # Vertical lines
+        v_layout = QHBoxLayout()
+        v_layout.addWidget(QLabel("Vertical (x-values, comma-separated):"))
+        self.vlines_input = QLineEdit(self)
+        self.vlines_input.setPlaceholderText("e.g., 10, 20, 30")
+        v_layout.addWidget(self.vlines_input)
+        ref_lines_layout.addLayout(v_layout)
+        
+        ref_lines_group.setLayout(ref_lines_layout)
+        layout.addWidget(ref_lines_group)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=self)
         layout.addWidget(buttons)
@@ -128,6 +153,10 @@ class QuickPlotDialog(QDialog):
                 )
                 return None
         
+        # Parse reference lines
+        hlines = self._parse_numbers(self.hlines_input.text())
+        vlines = self._parse_numbers(self.vlines_input.text())
+        
         return {
             "datasource_id": self.ds_combo.currentData(),
             "x": x,
@@ -135,7 +164,30 @@ class QuickPlotDialog(QDialog):
             "hue": hue,
             "sem_column": sem,
             "groups": groups,
+            "hlines": hlines,
+            "vlines": vlines,
         }
+    
+    def _parse_numbers(self, text: str) -> list[float]:
+        """Parse comma-separated numbers from text input.
+        
+        Returns empty list if parsing fails or text is empty.
+        """
+        if not text or not text.strip():
+            return []
+        
+        numbers = []
+        for part in text.split(','):
+            part = part.strip()
+            if not part:
+                continue
+            try:
+                numbers.append(float(part))
+            except ValueError:
+                # Skip invalid values silently
+                continue
+        
+        return numbers
 
 
 class PlotSettingsDialog(QDialog):

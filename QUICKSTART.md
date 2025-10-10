@@ -31,6 +31,10 @@ python -m plot_organizer.app
      - **hue** (optional): e.g., `Country` (will color lines by category)
      - **SEM column** (optional): e.g., `subject` or `trial` (computes mean ± SEM with shaded region)
      - **Groups** (optional): Multi-select columns to create faceted plots (one plot per unique combination)
+   - **Reference Lines** (optional):
+     - **Horizontal**: Enter y-values separated by commas (e.g., `0, 50, 100`)
+     - **Vertical**: Enter x-values separated by commas (e.g., `2020, 2021, 2022`)
+     - These create black dashed lines for marking thresholds, baselines, etc.
    - Click **OK**
    - The plot(s) will appear in the grid tiles
 
@@ -60,10 +64,11 @@ Using `organizations-10000.csv`:
 ## What's Implemented
 
 ✅ CSV loading with automatic type inference  
-✅ Plot dialog with x, y, hue, SEM column, and groups  
+✅ Plot dialog with x, y, hue, SEM column, groups, and reference lines  
+✅ **Reference Lines**: Horizontal and vertical dashed lines for thresholds/markers  
 ✅ **SEM (Standard Error of the Mean)**: Shaded regions showing mean ± SEM  
 ✅ Group faceting (multi-select columns, cross-product expansion)  
-✅ Shared axes across grouped plots (automatic)  
+✅ Shared axes across grouped plots (automatic, SEM-aware)  
 ✅ **Automatic aggregation**: Duplicate (x, hue) values are averaged for clean plots  
 ✅ **Plot settings**: Right-click plots to configure position and spanning (multi-cell plots)  
 ✅ **Context menu**: Right-click for settings, clear plot  

@@ -2,18 +2,25 @@
 
 _Last updated: 2025-10-10_
 
-## ✅ Now Working (v0.5)
+## ✅ Now Working (v0.6)
 
-**SEM (Standard Error of the Mean) plotting with shaded regions!**
+**Reference lines (horizontal & vertical) + SEM plotting with proper axis scaling!**
 
 - **CSV Loading**: Data → Add CSV… loads a file, infers column types, and adds it to the Data Sources dock.
-- **Plot Creation**: Plot → Quick Plot… lets you pick a data source, x/y columns, optional hue, and groups for faceting.
+- **Plot Creation**: Plot → Quick Plot… lets you pick a data source, x/y columns, optional hue, groups for faceting, and reference lines.
+- **Reference Lines**: Optional horizontal and vertical reference lines:
+  - Enter comma-separated values (e.g., "0, 50, 100")
+  - Black dashed lines with 70% opacity
+  - Useful for thresholds, baselines, time markers
+  - Shared across all grouped plots
+  - Preserved in exports
 - **SEM Column**: Optional SEM column selection for computing standard error:
   - Groups data by SEM column before averaging
   - Computes mean and SEM across groups
   - Displays SEM as shaded region around mean line
   - Works with both hue and non-hue plots
   - Validates that SEM column doesn't conflict with x, y, hue, or groups
+  - **NEW in v0.5.1**: Proper y-axis scaling for grouped plots with SEM (uses aggregated values, not raw data)
 - **Group Faceting**: Multi-select group columns to create multiple plots (one per unique combination), capped at 50 combinations.
 - **Shared Axes**: When using groups, all generated plots share the same x/y axis limits for easy comparison.
 - **Automatic Aggregation**: When multiple y-values exist for the same (x, hue) combination, they are automatically averaged. Clean, single-line plots!

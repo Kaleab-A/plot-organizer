@@ -33,6 +33,8 @@ class PlotTile(QFrame):
         self._hue: Optional[str] = None
         self._sem_column: Optional[str] = None
         self._filter_query: Optional[dict] = None
+        self._hlines: list[float] = []
+        self._vlines: list[float] = []
         self.setContextMenuPolicy(Qt.DefaultContextMenu)
 
         layout = QVBoxLayout(self)
@@ -70,10 +72,14 @@ class PlotTile(QFrame):
         filter_query: Optional[dict] = None,
         xlim: Optional[tuple[float, float]] = None,
         ylim: Optional[tuple[float, float]] = None,
+        hlines: Optional[list[float]] = None,
+        vlines: Optional[list[float]] = None,
     ) -> None:
         self._df, self._x, self._y, self._hue = df, x, y, hue
         self._sem_column = sem_column
         self._filter_query = filter_query
+        self._hlines = hlines or []
+        self._vlines = vlines or []
         
         # Apply filter if provided
         plot_df = df
@@ -105,6 +111,13 @@ class PlotTile(QFrame):
             ax.set_xlim(xlim)
         if ylim:
             ax.set_ylim(ylim)
+        
+        # Draw reference lines
+        for yval in self._hlines:
+            ax.axhline(y=yval, color='black', linestyle='--', linewidth=1, alpha=0.7, zorder=1)
+        
+        for xval in self._vlines:
+            ax.axvline(x=xval, color='black', linestyle='--', linewidth=1, alpha=0.7, zorder=1)
         
         self.canvas.draw_idle()
     
@@ -152,6 +165,8 @@ class PlotTile(QFrame):
         self._hue = None
         self._sem_column = None
         self._filter_query = None
+        self._hlines = []
+        self._vlines = []
         self.figure.clear()
         self.canvas.draw_idle()
 

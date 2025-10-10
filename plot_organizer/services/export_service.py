@@ -131,6 +131,13 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
     ax.set_xlabel(x, fontsize='small')
     ax.set_ylabel(y, fontsize='small')
     ax.tick_params(labelsize='small')
+    
+    # Draw reference lines
+    for yval in tile._hlines:
+        ax.axhline(y=yval, color='black', linestyle='--', linewidth=1, alpha=0.7, zorder=1)
+    
+    for xval in tile._vlines:
+        ax.axvline(x=xval, color='black', linestyle='--', linewidth=1, alpha=0.7, zorder=1)
 
 
 def export_single(

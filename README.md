@@ -1,6 +1,6 @@
 # Plot Organizer (Work in Progress)
 
-A desktop Python GUI (PySide6) to organize multiple line plots into a moveable grid, with CSV loading, faceting by groups, shared axes, SEM (Standard Error of the Mean) plotting with shaded regions, and export to PDF/SVG/EPS/PNG.
+A desktop Python GUI (PySide6) to organize multiple line plots into a moveable grid, with CSV loading, faceting by groups, shared axes, SEM (Standard Error of the Mean) plotting with shaded regions, reference lines for thresholds/markers, and export to PDF/SVG/EPS/PNG.
 
 ## Quick Start
 
@@ -33,10 +33,11 @@ pytest
 ## Status
 
 - ✅ CSV loading with automatic type inference
-- ✅ Plot creation with x, y, hue, SEM column, and groups
+- ✅ Plot creation with x, y, hue, SEM column, groups, and reference lines
+- ✅ Reference lines (horizontal & vertical dashed lines)
 - ✅ SEM (Standard Error of the Mean) with shaded regions
 - ✅ Group faceting (multi-select columns, up to 50 combinations)
-- ✅ Shared axes across grouped plots
+- ✅ SEM-aware shared axes across grouped plots
 - ✅ Automatic aggregation of duplicate values
 - ✅ Plot settings for position and spanning
 - ✅ Grid management (add/remove rows/cols)
