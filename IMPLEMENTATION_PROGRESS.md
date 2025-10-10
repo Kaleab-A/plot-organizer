@@ -2,12 +2,18 @@
 
 _Last updated: 2025-10-10_
 
-## ✅ Now Working (v0.4)
+## ✅ Now Working (v0.5)
 
-**Full control over plot positioning, spanning, and grid management with smart swapping!**
+**SEM (Standard Error of the Mean) plotting with shaded regions!**
 
 - **CSV Loading**: Data → Add CSV… loads a file, infers column types, and adds it to the Data Sources dock.
 - **Plot Creation**: Plot → Quick Plot… lets you pick a data source, x/y columns, optional hue, and groups for faceting.
+- **SEM Column**: Optional SEM column selection for computing standard error:
+  - Groups data by SEM column before averaging
+  - Computes mean and SEM across groups
+  - Displays SEM as shaded region around mean line
+  - Works with both hue and non-hue plots
+  - Validates that SEM column doesn't conflict with x, y, hue, or groups
 - **Group Faceting**: Multi-select group columns to create multiple plots (one per unique combination), capped at 50 combinations.
 - **Shared Axes**: When using groups, all generated plots share the same x/y axis limits for easy comparison.
 - **Automatic Aggregation**: When multiple y-values exist for the same (x, hue) combination, they are automatically averaged. Clean, single-line plots!
@@ -16,7 +22,7 @@ _Last updated: 2025-10-10_
 - **Context Menu**: Right-click plots for settings and clear options.
 - **Grid Management**: Add rows/cols via Grid menu; remove empty rows/cols with safety checks.
 - **Clear Plots**: Remove plot data from cells (with confirmation).
-- **Export**: Export → Export Grid… saves entire layout to PDF/SVG/EPS/PNG with configurable size and DPI.
+- **Export**: Export → Export Grid… saves entire layout to PDF/SVG/EPS/PNG with configurable size and DPI (includes SEM regions).
 - **Clean UI**: Plots now take maximum space with minimal margins.
 
 ## Implemented (v1 groundwork)

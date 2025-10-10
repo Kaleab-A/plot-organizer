@@ -31,6 +31,7 @@ class PlotTile(QFrame):
         self._x: Optional[str] = None
         self._y: Optional[str] = None
         self._hue: Optional[str] = None
+        self._sem_column: Optional[str] = None
         self._filter_query: Optional[dict] = None
         self.setContextMenuPolicy(Qt.DefaultContextMenu)
 
@@ -63,13 +64,15 @@ class PlotTile(QFrame):
         df: pd.DataFrame, 
         x: str, 
         y: str, 
-        hue: Optional[str] = None, 
+        hue: Optional[str] = None,
+        sem_column: Optional[str] = None,
         title: Optional[str] = None,
         filter_query: Optional[dict] = None,
         xlim: Optional[tuple[float, float]] = None,
         ylim: Optional[tuple[float, float]] = None,
     ) -> None:
         self._df, self._x, self._y, self._hue = df, x, y, hue
+        self._sem_column = sem_column
         self._filter_query = filter_query
         
         # Apply filter if provided
@@ -84,16 +87,13 @@ class PlotTile(QFrame):
         if plot_df.empty:
             ax.text(0.5, 0.5, "No data", ha='center', va='center', transform=ax.transAxes, alpha=0.3)
         elif hue:
-            # Group by hue and aggregate duplicate (x, hue) pairs
+            # Group by hue and aggregate
             for key, sub in plot_df.groupby(hue):
-                # Aggregate: compute mean of y for each unique x value
-                agg_sub = sub.groupby(x, as_index=False)[y].mean()
-                ax.plot(agg_sub[x], agg_sub[y], label=str(key))
+                self._plot_with_sem(ax, sub, x, y, sem_column, label=str(key))
             ax.legend(loc="best", fontsize='small')
         else:
             # No hue: aggregate duplicate x values
-            agg_df = plot_df.groupby(x, as_index=False)[y].mean()
-            ax.plot(agg_df[x], agg_df[y])
+            self._plot_with_sem(ax, plot_df, x, y, sem_column)
         
         if title:
             ax.set_title(title, fontsize='small', pad=2)
@@ -108,12 +108,49 @@ class PlotTile(QFrame):
         
         self.canvas.draw_idle()
     
+    def _plot_with_sem(self, ax, df: pd.DataFrame, x: str, y: str, sem_column: Optional[str], label: Optional[str] = None) -> None:
+        """Plot data with optional SEM shaded region.
+        
+        If sem_column is provided:
+        1. Group by sem_column first
+        2. Compute mean within each group
+        3. Then aggregate across sem_column groups to get overall mean and SEM
+        """
+        import numpy as np
+        
+        if sem_column and sem_column in df.columns:
+            # Step 1: Group by sem_column, then by x, compute mean of y
+            grouped = df.groupby([sem_column, x], as_index=False)[y].mean()
+            
+            # Step 2: For each x, compute mean and SEM across sem_column groups
+            stats = grouped.groupby(x)[y].agg(['mean', 'sem']).reset_index()
+            stats.columns = [x, 'mean_y', 'sem_y']
+            
+            # Plot mean line
+            line = ax.plot(stats[x], stats['mean_y'], label=label)[0]
+            
+            # Plot SEM as shaded region
+            if stats['sem_y'].notna().any():
+                color = line.get_color()
+                ax.fill_between(
+                    stats[x],
+                    stats['mean_y'] - stats['sem_y'],
+                    stats['mean_y'] + stats['sem_y'],
+                    alpha=0.2,
+                    color=color
+                )
+        else:
+            # No SEM: just aggregate by x and plot mean
+            agg_df = df.groupby(x, as_index=False)[y].mean()
+            ax.plot(agg_df[x], agg_df[y], label=label)
+    
     def clear_plot(self) -> None:
         """Clear the plot data and reset to empty state."""
         self._df = None
         self._x = None
         self._y = None
         self._hue = None
+        self._sem_column = None
         self._filter_query = None
         self.figure.clear()
         self.canvas.draw_idle()

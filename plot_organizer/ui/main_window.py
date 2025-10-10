@@ -116,6 +116,7 @@ class MainWindow(QMainWindow):
         
         df = ds.dataframe  # type: ignore[attr-defined]
         x, y, hue = sel["x"], sel["y"], sel["hue"]
+        sem_column = sel.get("sem_column")
         groups = sel.get("groups", [])
         
         # Expand groups to create multiple plots
@@ -157,6 +158,7 @@ class MainWindow(QMainWindow):
                 x=x,
                 y=y,
                 hue=hue,
+                sem_column=sem_column,
                 title=title,
                 filter_query=fq,
                 xlim=xlim,

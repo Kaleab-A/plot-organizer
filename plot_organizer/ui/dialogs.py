@@ -40,9 +40,19 @@ class QuickPlotDialog(QDialog):
         self.y_combo = QComboBox(self)
         self.hue_combo = QComboBox(self)
         self.hue_combo.addItem("(none)", "")
+        self.sem_combo = QComboBox(self)
+        self.sem_combo.addItem("(none)", "")
+        
         form.addRow("x", self.x_combo)
         form.addRow("y", self.y_combo)
         form.addRow("hue (optional)", self.hue_combo)
+        form.addRow("SEM column (optional)", self.sem_combo)
+        
+        # Add info label about SEM
+        sem_info = QLabel("SEM column: Groups data before averaging, then shows mean ± SEM as shaded region")
+        sem_info.setWordWrap(True)
+        sem_info.setStyleSheet("color: gray; font-size: 9px;")
+        form.addRow("", sem_info)
 
         layout.addLayout(form)
         
@@ -78,6 +88,7 @@ class QuickPlotDialog(QDialog):
         fill(self.x_combo)
         fill(self.y_combo)
         fill(self.hue_combo, allow_blank=True)
+        fill(self.sem_combo, allow_blank=True)
         
         # Refresh group list
         self.group_list.clear()
@@ -96,11 +107,33 @@ class QuickPlotDialog(QDialog):
         if self.result() != QDialog.Accepted:
             return None
         groups = [item.text() for item in self.group_list.selectedItems()]
+        x = self.x_combo.currentData()
+        y = self.y_combo.currentData()
+        hue = self.hue_combo.currentData() or None
+        sem = self.sem_combo.currentData() or None
+        
+        # Validate SEM column doesn't conflict with other columns
+        if sem:
+            used_cols = {x, y}
+            if hue:
+                used_cols.add(hue)
+            used_cols.update(groups)
+            
+            if sem in used_cols:
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.warning(
+                    self, "Invalid SEM Column",
+                    f"SEM column '{sem}' is already used as x, y, hue, or group.\n"
+                    "Please select a different column."
+                )
+                return None
+        
         return {
             "datasource_id": self.ds_combo.currentData(),
-            "x": self.x_combo.currentData(),
-            "y": self.y_combo.currentData(),
-            "hue": self.hue_combo.currentData() or None,
+            "x": x,
+            "y": y,
+            "hue": hue,
+            "sem_column": sem,
             "groups": groups,
         }
 

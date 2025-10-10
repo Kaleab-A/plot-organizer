@@ -29,6 +29,7 @@ python -m plot_organizer.app
      - **x**: e.g., `Founded` (year)
      - **y**: e.g., `Number of employees`
      - **hue** (optional): e.g., `Country` (will color lines by category)
+     - **SEM column** (optional): e.g., `subject` or `trial` (computes mean ± SEM with shaded region)
      - **Groups** (optional): Multi-select columns to create faceted plots (one plot per unique combination)
    - Click **OK**
    - The plot(s) will appear in the grid tiles
@@ -59,20 +60,21 @@ Using `organizations-10000.csv`:
 ## What's Implemented
 
 ✅ CSV loading with automatic type inference  
-✅ Plot dialog with x, y, hue, and groups  
+✅ Plot dialog with x, y, hue, SEM column, and groups  
+✅ **SEM (Standard Error of the Mean)**: Shaded regions showing mean ± SEM  
 ✅ Group faceting (multi-select columns, cross-product expansion)  
 ✅ Shared axes across grouped plots (automatic)  
 ✅ **Automatic aggregation**: Duplicate (x, hue) values are averaged for clean plots  
 ✅ **Plot settings**: Right-click plots to configure position and spanning (multi-cell plots)  
 ✅ **Context menu**: Right-click for settings, clear plot  
 ✅ **Remove rows/cols**: Grid → - Row/Col (only if empty)  
+✅ **Export**: Whole-grid export to PDF/SVG/EPS/PNG with configurable size and DPI  
 ✅ Clean UI with maximized plot space  
 ✅ Dynamic grid growth  
 
 ## Coming Soon
 
 - Drag-and-drop to rearrange plots
-- Whole-grid export to PDF/SVG/PNG
 - Project save/load
 - Advanced NA handling wizard
 - Type confirmation dialog

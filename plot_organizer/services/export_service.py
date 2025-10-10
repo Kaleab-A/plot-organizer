@@ -74,11 +74,14 @@ def export_grid(
 
 def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
     """Render a PlotTile's data to a matplotlib axis."""
+    import numpy as np
+    
     if tile._df is None:
         return
     
     df = tile._df
     x, y, hue = tile._x, tile._y, tile._hue
+    sem_column = tile._sem_column
     filter_query = tile._filter_query
     
     # Apply filter if present
@@ -87,15 +90,37 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
         for col, val in filter_query.items():
             plot_df = plot_df[plot_df[col] == val]
     
-    # Apply aggregation (same as in PlotTile.set_plot)
+    # Helper function to plot with SEM (same logic as PlotTile._plot_with_sem)
+    def plot_with_sem(data, label=None):
+        if sem_column and sem_column in data.columns:
+            # Group by sem_column first, then by x
+            grouped = data.groupby([sem_column, x], as_index=False)[y].mean()
+            # Compute mean and SEM across sem_column groups
+            stats = grouped.groupby(x)[y].agg(['mean', 'sem']).reset_index()
+            stats.columns = [x, 'mean_y', 'sem_y']
+            
+            line = ax.plot(stats[x], stats['mean_y'], label=label)[0]
+            
+            if stats['sem_y'].notna().any():
+                color = line.get_color()
+                ax.fill_between(
+                    stats[x],
+                    stats['mean_y'] - stats['sem_y'],
+                    stats['mean_y'] + stats['sem_y'],
+                    alpha=0.2,
+                    color=color
+                )
+        else:
+            agg_data = data.groupby(x, as_index=False)[y].mean()
+            ax.plot(agg_data[x], agg_data[y], label=label)
+    
+    # Apply aggregation with SEM
     if hue:
         for key, sub in plot_df.groupby(hue):
-            agg_sub = sub.groupby(x, as_index=False)[y].mean()
-            ax.plot(agg_sub[x], agg_sub[y], label=str(key))
+            plot_with_sem(sub, label=str(key))
         ax.legend(loc="best", fontsize='small')
     else:
-        agg_df = plot_df.groupby(x, as_index=False)[y].mean()
-        ax.plot(agg_df[x], agg_df[y])
+        plot_with_sem(plot_df)
     
     # Get title from the tile's figure if it has one
     if tile.figure.axes:
