@@ -11,6 +11,12 @@ pip install -r requirements.txt
 python -m plot_organizer.app
 ```
 
+**NumPy 2 Compatibility:** This project requires NumPy >= 2.0. If you encounter NumPy import errors, reinstall dependencies to get NumPy 2-compatible wheels:
+```bash
+pip uninstall -y pandas matplotlib pyarrow
+pip install --no-cache-dir -r requirements.txt
+```
+
 ## Structure
 
 - `plot_organizer/app.py`: Entrypoint launching the Qt `MainWindow` and `GridBoard`.

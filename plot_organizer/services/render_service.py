@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-import matplotlib
-matplotlib.use("Agg")  # safe default; Qt backend is used in UI widgets
 import matplotlib.pyplot as plt
 import pandas as pd
 

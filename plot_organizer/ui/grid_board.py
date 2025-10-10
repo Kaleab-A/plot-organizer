@@ -9,7 +9,13 @@ from PySide6.QtWidgets import (
     QFrame,
     QLabel,
     QVBoxLayout,
+    QHBoxLayout,
 )
+
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
+from matplotlib.figure import Figure
+import pandas as pd
 
 
 class PlotTile(QFrame):
@@ -17,10 +23,39 @@ class PlotTile(QFrame):
         super().__init__(parent)
         self.setFrameShape(QFrame.StyledPanel)
         self.setObjectName("PlotTile")
+        self._df: Optional[pd.DataFrame] = None
+        self._x: Optional[str] = None
+        self._y: Optional[str] = None
+        self._hue: Optional[str] = None
+
         layout = QVBoxLayout(self)
-        label = QLabel("Empty", self)
-        label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(label)
+        self.header = QLabel("Empty", self)
+        self.header.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        layout.addWidget(self.header)
+
+        self.figure = Figure(figsize=(4, 3))
+        self.canvas = FigureCanvas(self.figure)
+        self.toolbar = NavigationToolbar(self.canvas, self)
+        layout.addWidget(self.toolbar)
+        layout.addWidget(self.canvas)
+
+    def is_empty(self) -> bool:
+        return self._df is None
+
+    def set_plot(self, df: pd.DataFrame, x: str, y: str, hue: Optional[str] = None, title: Optional[str] = None) -> None:
+        self._df, self._x, self._y, self._hue = df, x, y, hue
+        self.header.setText(title or f"{y} vs {x}")
+        ax = self.figure.subplots()
+        ax.clear()
+        if hue:
+            for key, sub in df.groupby(hue):
+                ax.plot(sub[x], sub[y], label=str(key))
+            ax.legend(loc="best")
+        else:
+            ax.plot(df[x], df[y])
+        ax.set_xlabel(x)
+        ax.set_ylabel(y)
+        self.canvas.draw_idle()
 
 
 class GridBoard(QWidget):
@@ -49,5 +84,18 @@ class GridBoard(QWidget):
         for r in range(self._rows):
             self._grid.addWidget(PlotTile(self), r, c)
         self._cols += 1
+
+    def first_empty_coord(self) -> Optional[tuple[int, int]]:
+        for r in range(self._rows):
+            for c in range(self._cols):
+                tile = self._grid.itemAtPosition(r, c).widget()
+                if isinstance(tile, PlotTile) and tile.is_empty():
+                    return (r, c)
+        return None
+
+    def tile_at(self, r: int, c: int) -> PlotTile:
+        w = self._grid.itemAtPosition(r, c).widget()
+        assert isinstance(w, PlotTile)
+        return w
 
 

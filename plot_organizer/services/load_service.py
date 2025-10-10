@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Iterable, Optional
+import uuid
+from pathlib import Path
 
 import pandas as pd
 
-from plot_organizer.models import ColumnSchema
+from plot_organizer.models import ColumnSchema, DataSource
 
 
 def infer_var_type(series: pd.Series) -> str:
@@ -35,5 +37,22 @@ def build_schema(df: pd.DataFrame) -> list[ColumnSchema]:
             )
         )
     return schema
+
+
+def load_csv_to_datasource(path: str, name: Optional[str] = None) -> DataSource:
+    """Load a CSV file into a DataSource with inferred schema.
+
+    This is a synchronous loader; call it from a worker thread in the UI.
+    """
+    df = pd.read_csv(path)
+    schema = build_schema(df)
+    ds = DataSource(
+        id=str(uuid.uuid4()),
+        name=name or Path(path).stem,
+        path=path,
+        dataframe=df,
+        schema=schema,
+    )
+    return ds
 
 
