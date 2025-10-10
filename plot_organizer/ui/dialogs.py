@@ -12,6 +12,8 @@ from PySide6.QtWidgets import (
     QListWidget,
     QLabel,
     QAbstractItemView,
+    QSpinBox,
+    QGroupBox,
 )
 
 
@@ -96,6 +98,143 @@ class QuickPlotDialog(QDialog):
             "y": self.y_combo.currentData(),
             "hue": self.hue_combo.currentData() or None,
             "groups": groups,
+        }
+
+
+class PlotSettingsDialog(QDialog):
+    """Dialog to configure plot position and spanning in the grid.
+    
+    Note: Position and span changes are mutually exclusive - only one can be changed at a time.
+    """
+    
+    def __init__(self, parent=None, *, max_rows: int, max_cols: int, current_row: int = 0, current_col: int = 0, 
+                 current_rowspan: int = 1, current_colspan: int = 1):
+        super().__init__(parent)
+        self.setWindowTitle("Plot Settings")
+        
+        self._initial_row = current_row
+        self._initial_col = current_col
+        self._initial_rowspan = current_rowspan
+        self._initial_colspan = current_colspan
+        
+        layout = QVBoxLayout(self)
+        
+        # Info label at top
+        info_top = QLabel("Note: Change position OR span, not both at the same time.")
+        info_top.setWordWrap(True)
+        info_top.setStyleSheet("color: #2196F3; font-weight: bold; font-size: 10px;")
+        layout.addWidget(info_top)
+        
+        # Position group
+        pos_group = QGroupBox("Position (Swap with target cell)")
+        pos_layout = QFormLayout()
+        
+        self.row_spin = QSpinBox(self)
+        self.row_spin.setMinimum(0)
+        self.row_spin.setMaximum(max_rows - 1)
+        self.row_spin.setValue(current_row)
+        pos_layout.addRow("Start Row:", self.row_spin)
+        
+        self.col_spin = QSpinBox(self)
+        self.col_spin.setMinimum(0)
+        self.col_spin.setMaximum(max_cols - 1)
+        self.col_spin.setValue(current_col)
+        pos_layout.addRow("Start Column:", self.col_spin)
+        
+        self.pos_note = QLabel("Will swap with plot at target cell (if spans match)")
+        self.pos_note.setWordWrap(True)
+        self.pos_note.setStyleSheet("color: gray; font-size: 9px;")
+        pos_layout.addRow(self.pos_note)
+        
+        pos_group.setLayout(pos_layout)
+        layout.addWidget(pos_group)
+        
+        # Span group
+        span_group = QGroupBox("Span (Multi-cell)")
+        span_layout = QFormLayout()
+        
+        self.rowspan_spin = QSpinBox(self)
+        self.rowspan_spin.setMinimum(1)
+        self.rowspan_spin.setMaximum(10)
+        self.rowspan_spin.setValue(current_rowspan)
+        span_layout.addRow("Rows to span:", self.rowspan_spin)
+        
+        self.colspan_spin = QSpinBox(self)
+        self.colspan_spin.setMinimum(1)
+        self.colspan_spin.setMaximum(10)
+        self.colspan_spin.setValue(current_colspan)
+        span_layout.addRow("Columns to span:", self.colspan_spin)
+        
+        self.span_note = QLabel("New rows/cols may be created if needed")
+        self.span_note.setWordWrap(True)
+        self.span_note.setStyleSheet("color: gray; font-size: 9px;")
+        span_layout.addRow(self.span_note)
+        
+        span_group.setLayout(span_layout)
+        layout.addWidget(span_group)
+        
+        # Connect signals to detect changes
+        self.row_spin.valueChanged.connect(self._on_position_changed)
+        self.col_spin.valueChanged.connect(self._on_position_changed)
+        self.rowspan_spin.valueChanged.connect(self._on_span_changed)
+        self.colspan_spin.valueChanged.connect(self._on_span_changed)
+        
+        # Buttons
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=self)
+        buttons.accepted.connect(self._validate_and_accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+    
+    def _on_position_changed(self) -> None:
+        """Lock span controls when position changes."""
+        pos_changed = (self.row_spin.value() != self._initial_row or 
+                      self.col_spin.value() != self._initial_col)
+        if pos_changed:
+            self.rowspan_spin.setEnabled(False)
+            self.colspan_spin.setEnabled(False)
+    
+    def _on_span_changed(self) -> None:
+        """Lock position controls when span changes."""
+        span_changed = (self.rowspan_spin.value() != self._initial_rowspan or 
+                       self.colspan_spin.value() != self._initial_colspan)
+        if span_changed:
+            self.row_spin.setEnabled(False)
+            self.col_spin.setEnabled(False)
+    
+    def _validate_and_accept(self) -> None:
+        """Validate that only position OR span changed, not both."""
+        pos_changed = (self.row_spin.value() != self._initial_row or 
+                      self.col_spin.value() != self._initial_col)
+        span_changed = (self.rowspan_spin.value() != self._initial_rowspan or 
+                       self.colspan_spin.value() != self._initial_colspan)
+        
+        if pos_changed and span_changed:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self, "Invalid Change",
+                "Please change either position OR span, not both at the same time.\n\n"
+                "Reset one of them to proceed."
+            )
+            return
+        
+        self.accept()
+    
+    def get_settings(self) -> Optional[dict]:
+        if self.result() != QDialog.Accepted:
+            return None
+        
+        pos_changed = (self.row_spin.value() != self._initial_row or 
+                      self.col_spin.value() != self._initial_col)
+        span_changed = (self.rowspan_spin.value() != self._initial_rowspan or 
+                       self.colspan_spin.value() != self._initial_colspan)
+        
+        return {
+            "row": self.row_spin.value(),
+            "col": self.col_spin.value(),
+            "rowspan": self.rowspan_spin.value(),
+            "colspan": self.colspan_spin.value(),
+            "position_changed": pos_changed,
+            "span_changed": span_changed,
         }
 
 

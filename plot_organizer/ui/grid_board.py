@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QContextMenuEvent, QAction
 from PySide6.QtWidgets import (
     QWidget,
     QGridLayout,
@@ -10,6 +11,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QVBoxLayout,
     QHBoxLayout,
+    QMenu,
 )
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -18,6 +20,9 @@ import pandas as pd
 
 
 class PlotTile(QFrame):
+    settings_requested = Signal(object)  # Emits self
+    clear_requested = Signal(object)  # Emits self
+    
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setFrameShape(QFrame.StyledPanel)
@@ -27,6 +32,7 @@ class PlotTile(QFrame):
         self._y: Optional[str] = None
         self._hue: Optional[str] = None
         self._filter_query: Optional[dict] = None
+        self.setContextMenuPolicy(Qt.DefaultContextMenu)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(2, 2, 2, 2)
@@ -38,6 +44,19 @@ class PlotTile(QFrame):
 
     def is_empty(self) -> bool:
         return self._df is None
+    
+    def contextMenuEvent(self, event: QContextMenuEvent) -> None:
+        menu = QMenu(self)
+        settings_action = QAction("Plot Settings...", self)
+        settings_action.triggered.connect(lambda: self.settings_requested.emit(self))
+        menu.addAction(settings_action)
+        
+        if not self.is_empty():
+            clear_action = QAction("Clear Plot", self)
+            clear_action.triggered.connect(lambda: self.clear_requested.emit(self))
+            menu.addAction(clear_action)
+        
+        menu.exec(event.globalPos())
 
     def set_plot(
         self, 
@@ -65,11 +84,16 @@ class PlotTile(QFrame):
         if plot_df.empty:
             ax.text(0.5, 0.5, "No data", ha='center', va='center', transform=ax.transAxes, alpha=0.3)
         elif hue:
+            # Group by hue and aggregate duplicate (x, hue) pairs
             for key, sub in plot_df.groupby(hue):
-                ax.plot(sub[x], sub[y], label=str(key))
+                # Aggregate: compute mean of y for each unique x value
+                agg_sub = sub.groupby(x, as_index=False)[y].mean()
+                ax.plot(agg_sub[x], agg_sub[y], label=str(key))
             ax.legend(loc="best", fontsize='small')
         else:
-            ax.plot(plot_df[x], plot_df[y])
+            # No hue: aggregate duplicate x values
+            agg_df = plot_df.groupby(x, as_index=False)[y].mean()
+            ax.plot(agg_df[x], agg_df[y])
         
         if title:
             ax.set_title(title, fontsize='small', pad=2)
@@ -82,6 +106,16 @@ class PlotTile(QFrame):
         if ylim:
             ax.set_ylim(ylim)
         
+        self.canvas.draw_idle()
+    
+    def clear_plot(self) -> None:
+        """Clear the plot data and reset to empty state."""
+        self._df = None
+        self._x = None
+        self._y = None
+        self._hue = None
+        self._filter_query = None
+        self.figure.clear()
         self.canvas.draw_idle()
 
 
@@ -120,9 +154,155 @@ class GridBoard(QWidget):
                     return (r, c)
         return None
 
-    def tile_at(self, r: int, c: int) -> PlotTile:
-        w = self._grid.itemAtPosition(r, c).widget()
-        assert isinstance(w, PlotTile)
-        return w
+    def tile_at(self, r: int, c: int) -> Optional[PlotTile]:
+        item = self._grid.itemAtPosition(r, c)
+        if item is None:
+            return None
+        w = item.widget()
+        if isinstance(w, PlotTile):
+            return w
+        return None
+    
+    def remove_row(self, row: int) -> bool:
+        """Remove a row from the grid. Returns False if row contains non-empty plots."""
+        if row < 0 or row >= self._rows:
+            return False
+        
+        # Check if row has any non-empty plots
+        for c in range(self._cols):
+            tile = self.tile_at(row, c)
+            if tile and not tile.is_empty():
+                return False
+        
+        # Remove widgets in this row
+        for c in range(self._cols):
+            item = self._grid.itemAtPosition(row, c)
+            if item:
+                widget = item.widget()
+                if widget:
+                    self._grid.removeWidget(widget)
+                    widget.deleteLater()
+        
+        # Shift rows up
+        for r in range(row + 1, self._rows):
+            for c in range(self._cols):
+                item = self._grid.itemAtPosition(r, c)
+                if item:
+                    widget = item.widget()
+                    if widget:
+                        self._grid.removeWidget(widget)
+                        self._grid.addWidget(widget, r - 1, c)
+        
+        self._rows -= 1
+        return True
+    
+    def remove_col(self, col: int) -> bool:
+        """Remove a column from the grid. Returns False if column contains non-empty plots."""
+        if col < 0 or col >= self._cols:
+            return False
+        
+        # Check if column has any non-empty plots
+        for r in range(self._rows):
+            tile = self.tile_at(r, col)
+            if tile and not tile.is_empty():
+                return False
+        
+        # Remove widgets in this column
+        for r in range(self._rows):
+            item = self._grid.itemAtPosition(r, col)
+            if item:
+                widget = item.widget()
+                if widget:
+                    self._grid.removeWidget(widget)
+                    widget.deleteLater()
+        
+        # Shift columns left
+        for c in range(col + 1, self._cols):
+            for r in range(self._rows):
+                item = self._grid.itemAtPosition(r, c)
+                if item:
+                    widget = item.widget()
+                    if widget:
+                        self._grid.removeWidget(widget)
+                        self._grid.addWidget(widget, r, c - 1)
+        
+        self._cols -= 1
+        return True
+    
+    def move_plot(self, from_row: int, from_col: int, to_row: int, to_col: int, 
+                  rowspan: int = 1, colspan: int = 1) -> None:
+        """Move a plot to a new position with optional spanning."""
+        # Ensure target area fits
+        while to_row + rowspan > self._rows:
+            self.add_row()
+        while to_col + colspan > self._cols:
+            self.add_col()
+        
+        # Get source tile
+        source_tile = self.tile_at(from_row, from_col)
+        if not source_tile:
+            return
+        
+        # Remove from old position
+        self._grid.removeWidget(source_tile)
+        
+        # Clear target cells if they have empty plots
+        for r in range(to_row, to_row + rowspan):
+            for c in range(to_col, to_col + colspan):
+                if r == to_row and c == to_col:
+                    continue  # Skip the main cell
+                target_tile = self.tile_at(r, c)
+                if target_tile and target_tile.is_empty():
+                    self._grid.removeWidget(target_tile)
+                    target_tile.deleteLater()
+        
+        # Add to new position with span
+        self._grid.addWidget(source_tile, to_row, to_col, rowspan, colspan)
+    
+    def find_tile_position(self, tile: PlotTile) -> Optional[tuple[int, int, int, int]]:
+        """Find the position and span of a tile. Returns (row, col, rowspan, colspan) or None."""
+        for r in range(self._rows):
+            for c in range(self._cols):
+                item = self._grid.itemAtPosition(r, c)
+                if item and item.widget() == tile:
+                    # Get span info from layout
+                    idx = self._grid.indexOf(tile)
+                    if idx >= 0:
+                        row, col, rowspan, colspan = self._grid.getItemPosition(idx)
+                        return (row, col, rowspan, colspan)
+        return None
+    
+    def swap_plots(self, tile1: PlotTile, tile2: PlotTile) -> tuple[bool, str]:
+        """Swap two plots if they have matching spans.
+        
+        Returns (success, message) tuple.
+        """
+        pos1 = self.find_tile_position(tile1)
+        pos2 = self.find_tile_position(tile2)
+        
+        if pos1 is None or pos2 is None:
+            return False, "Could not find plot positions"
+        
+        row1, col1, rowspan1, colspan1 = pos1
+        row2, col2, rowspan2, colspan2 = pos2
+        
+        # Check if spans match
+        if rowspan1 != rowspan2 or colspan1 != colspan2:
+            return False, (
+                f"Cannot swap: Span mismatch.\n\n"
+                f"Source: {rowspan1}×{colspan1} span\n"
+                f"Target: {rowspan2}×{colspan2} span\n\n"
+                f"Please make both plots 1×1 first, then swap."
+            )
+        
+        # Remove both from grid
+        self._grid.removeWidget(tile1)
+        self._grid.removeWidget(tile2)
+        
+        # Add them back swapped
+        self._grid.addWidget(tile1, row2, col2, rowspan2, colspan2)
+        self._grid.addWidget(tile2, row1, col1, rowspan1, colspan1)
+        
+        return True, "Plots swapped successfully"
 
 

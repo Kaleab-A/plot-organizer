@@ -2,16 +2,21 @@
 
 _Last updated: 2025-10-10_
 
-## ✅ Now Working (v0.2)
+## ✅ Now Working (v0.3.1)
 
-**You can now load a CSV, create plots, and use group faceting!**
+**Full control over plot positioning, spanning, and grid management with smart swapping!**
 
 - **CSV Loading**: Data → Add CSV… loads a file, infers column types, and adds it to the Data Sources dock.
 - **Plot Creation**: Plot → Quick Plot… lets you pick a data source, x/y columns, optional hue, and groups for faceting.
 - **Group Faceting**: Multi-select group columns to create multiple plots (one per unique combination), capped at 50 combinations.
 - **Shared Axes**: When using groups, all generated plots share the same x/y axis limits for easy comparison.
-- **Clean UI**: Plots now take maximum space with minimal margins; navigation toolbar and header labels removed.
-- **Grid Operations**: Grid → +Row / +Col dynamically grows the grid.
+- **Automatic Aggregation**: When multiple y-values exist for the same (x, hue) combination, they are automatically averaged. Clean, single-line plots!
+- **Plot Settings**: Right-click any plot → configure position (swap) OR spanning (change one at a time).
+- **Smart Swapping**: Position changes swap plots if spans match; validates and gives clear error messages if not.
+- **Context Menu**: Right-click plots for settings and clear options.
+- **Grid Management**: Add rows/cols via Grid menu; remove empty rows/cols with safety checks.
+- **Clear Plots**: Remove plot data from cells (with confirmation).
+- **Clean UI**: Plots now take maximum space with minimal margins.
 
 ## Implemented (v1 groundwork)
 

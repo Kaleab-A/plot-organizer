@@ -1,4 +1,4 @@
-# Quick Start Guide
+git # Quick Start Guide
 
 ## Installation
 
@@ -62,6 +62,10 @@ Using `organizations-10000.csv`:
 ✅ Plot dialog with x, y, hue, and groups  
 ✅ Group faceting (multi-select columns, cross-product expansion)  
 ✅ Shared axes across grouped plots (automatic)  
+✅ **Automatic aggregation**: Duplicate (x, hue) values are averaged for clean plots  
+✅ **Plot settings**: Right-click plots to configure position and spanning (multi-cell plots)  
+✅ **Context menu**: Right-click for settings, clear plot  
+✅ **Remove rows/cols**: Grid → - Row/Col (only if empty)  
 ✅ Clean UI with maximized plot space  
 ✅ Dynamic grid growth  
 

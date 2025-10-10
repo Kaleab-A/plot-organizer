@@ -4,9 +4,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QFileDialog, QMessageBox, QDialog
 
-from plot_organizer.ui.grid_board import GridBoard
+from plot_organizer.ui.grid_board import GridBoard, PlotTile
 from plot_organizer.ui.data_manager import DataManagerDock
-from plot_organizer.ui.dialogs import QuickPlotDialog
+from plot_organizer.ui.dialogs import QuickPlotDialog, PlotSettingsDialog
 from plot_organizer.services.load_service import load_csv_to_datasource
 from plot_organizer.services.plot_service import expand_groups, shared_limits
 
@@ -35,6 +35,9 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.LeftDockWidgetArea, self.data_manager)
         self.data_manager.btn_add.clicked.connect(self._action_add_csv)
         self.data_manager.btn_remove.clicked.connect(self._action_remove_selected_ds)
+        
+        # Connect tile signals
+        self._connect_tile_signals()
 
     def _init_menu(self) -> None:
         menubar = self.menuBar()
@@ -60,6 +63,13 @@ class MainWindow(QMainWindow):
         add_col.triggered.connect(lambda: self.grid_board.add_col())
         grid_menu.addAction(add_row)
         grid_menu.addAction(add_col)
+        grid_menu.addSeparator()
+        remove_row = QAction("- Row...", self)
+        remove_col = QAction("- Col...", self)
+        remove_row.triggered.connect(self._action_remove_row)
+        remove_col.triggered.connect(self._action_remove_col)
+        grid_menu.addAction(remove_row)
+        grid_menu.addAction(remove_col)
 
     # actions
     def _action_add_csv(self) -> None:
@@ -146,5 +156,110 @@ class MainWindow(QMainWindow):
                 xlim=xlim,
                 ylim=ylim,
             )
+            # Connect signals for new tiles
+            tile.settings_requested.connect(self._on_tile_settings)
+            tile.clear_requested.connect(self._on_tile_clear)
+    
+    def _connect_tile_signals(self) -> None:
+        """Connect signals for all existing tiles."""
+        for r in range(self.grid_board._rows):
+            for c in range(self.grid_board._cols):
+                tile = self.grid_board.tile_at(r, c)
+                if tile:
+                    tile.settings_requested.connect(self._on_tile_settings)
+                    tile.clear_requested.connect(self._on_tile_clear)
+    
+    def _on_tile_settings(self, tile: PlotTile) -> None:
+        """Handle settings request from a tile."""
+        pos = self.grid_board.find_tile_position(tile)
+        if pos is None:
+            return
+        
+        row, col, rowspan, colspan = pos
+        dlg = PlotSettingsDialog(
+            self,
+            max_rows=self.grid_board._rows,
+            max_cols=self.grid_board._cols,
+            current_row=row,
+            current_col=col,
+            current_rowspan=rowspan,
+            current_colspan=colspan,
+        )
+        
+        if dlg.exec() == QDialog.Accepted:
+            settings = dlg.get_settings()
+            if not settings:
+                return
+            
+            # Handle position change (swap)
+            if settings.get("position_changed"):
+                target_row = settings["row"]
+                target_col = settings["col"]
+                
+                # Check if moving to same position
+                if target_row == row and target_col == col:
+                    QMessageBox.information(self, "No Change", "Plot is already at this position.")
+                    return
+                
+                # Get tile at target position
+                target_tile = self.grid_board.tile_at(target_row, target_col)
+                if target_tile is None:
+                    QMessageBox.warning(self, "Invalid Target", "No tile found at target position.")
+                    return
+                
+                # Attempt swap
+                success, message = self.grid_board.swap_plots(tile, target_tile)
+                if success:
+                    QMessageBox.information(self, "Success", message)
+                    self._connect_tile_signals()
+                else:
+                    QMessageBox.warning(self, "Cannot Swap", message)
+            
+            # Handle span change
+            elif settings.get("span_changed"):
+                self.grid_board.move_plot(
+                    row, col,
+                    row, col,  # Same position
+                    settings["rowspan"], settings["colspan"]
+                )
+                self._connect_tile_signals()
+    
+    def _on_tile_clear(self, tile: PlotTile) -> None:
+        """Handle clear request from a tile."""
+        reply = QMessageBox.question(
+            self, "Clear Plot",
+            "Are you sure you want to clear this plot?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            tile.clear_plot()
+    
+    def _action_remove_row(self) -> None:
+        """Remove a row from the grid."""
+        from PySide6.QtWidgets import QInputDialog
+        row, ok = QInputDialog.getInt(
+            self, "Remove Row",
+            f"Enter row number to remove (0-{self.grid_board._rows - 1}):",
+            0, 0, self.grid_board._rows - 1
+        )
+        if ok:
+            if self.grid_board.remove_row(row):
+                QMessageBox.information(self, "Success", f"Row {row} removed.")
+            else:
+                QMessageBox.warning(self, "Cannot Remove", "Row contains non-empty plots. Clear them first.")
+    
+    def _action_remove_col(self) -> None:
+        """Remove a column from the grid."""
+        from PySide6.QtWidgets import QInputDialog
+        col, ok = QInputDialog.getInt(
+            self, "Remove Column",
+            f"Enter column number to remove (0-{self.grid_board._cols - 1}):",
+            0, 0, self.grid_board._cols - 1
+        )
+        if ok:
+            if self.grid_board.remove_col(col):
+                QMessageBox.information(self, "Success", f"Column {col} removed.")
+            else:
+                QMessageBox.warning(self, "Cannot Remove", "Column contains non-empty plots. Clear them first.")
 
 
