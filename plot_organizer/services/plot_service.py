@@ -58,6 +58,7 @@ def shared_limits_with_sem(
     y: str,
     sem_column: str | None,
     hue: str | None = None,
+    sem_precomputed: bool = False,
 ) -> tuple[tuple[float, float], tuple[float, float]]:
     """Compute shared x/y limits accounting for SEM aggregation.
     
@@ -91,12 +92,18 @@ def shared_limits_with_sem(
             if hue and hue in subset.columns:
                 # Group by hue first, then aggregate
                 for _, hue_sub in subset.groupby(hue):
-                    y_vals = _compute_sem_stats(hue_sub, x, y, sem_column)
+                    if sem_precomputed:
+                        y_vals = _compute_precomputed_sem_stats(hue_sub, x, y, sem_column)
+                    else:
+                        y_vals = _compute_sem_stats(hue_sub, x, y, sem_column)
                     if y_vals:
                         ymins.extend(y_vals[0])  # means - SEM
                         ymaxs.extend(y_vals[1])  # means + SEM
             else:
-                y_vals = _compute_sem_stats(subset, x, y, sem_column)
+                if sem_precomputed:
+                    y_vals = _compute_precomputed_sem_stats(subset, x, y, sem_column)
+                else:
+                    y_vals = _compute_sem_stats(subset, x, y, sem_column)
                 if y_vals:
                     ymins.extend(y_vals[0])
                     ymaxs.extend(y_vals[1])
@@ -138,6 +145,33 @@ def _compute_sem_stats(
     
     means = stats['mean'].values
     sems = stats['sem'].fillna(0).values  # Fill NaN SEM with 0
+    
+    lower_bounds = (means - sems).tolist()
+    upper_bounds = (means + sems).tolist()
+    
+    return (lower_bounds, upper_bounds)
+
+
+def _compute_precomputed_sem_stats(
+    df: pd.DataFrame, x: str, y: str, sem_column: str
+) -> tuple[list[float], list[float]] | None:
+    """Helper to compute mean ± pre-computed SEM values for a dataframe.
+    
+    Averages y and SEM values if multiple rows exist for the same x.
+    Returns (lower_bounds, upper_bounds) where lower = mean - SEM
+    and upper = mean + SEM for each x value.
+    """
+    # Aggregate by x: mean of y and mean of sem
+    agg_df = df.groupby(x, as_index=False).agg({
+        y: 'mean',
+        sem_column: 'mean'
+    })
+    
+    if agg_df.empty:
+        return None
+    
+    means = agg_df[y].values
+    sems = agg_df[sem_column].fillna(0).values  # Fill NaN SEM with 0
     
     lower_bounds = (means - sems).tolist()
     upper_bounds = (means + sems).tolist()

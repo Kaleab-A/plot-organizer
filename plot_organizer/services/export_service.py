@@ -82,6 +82,7 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
     df = tile._df
     x, y, hue = tile._x, tile._y, tile._hue
     sem_column = tile._sem_column
+    sem_precomputed = tile._sem_precomputed
     filter_query = tile._filter_query
     
     # Apply filter if present
@@ -93,23 +94,42 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
     # Helper function to plot with SEM (same logic as PlotTile._plot_with_sem)
     def plot_with_sem(data, label=None):
         if sem_column and sem_column in data.columns:
-            # Group by sem_column first, then by x
-            grouped = data.groupby([sem_column, x], as_index=False)[y].mean()
-            # Compute mean and SEM across sem_column groups
-            stats = grouped.groupby(x)[y].agg(['mean', 'sem']).reset_index()
-            stats.columns = [x, 'mean_y', 'sem_y']
-            
-            line = ax.plot(stats[x], stats['mean_y'], label=label)[0]
-            
-            if stats['sem_y'].notna().any():
-                color = line.get_color()
-                ax.fill_between(
-                    stats[x],
-                    stats['mean_y'] - stats['sem_y'],
-                    stats['mean_y'] + stats['sem_y'],
-                    alpha=0.2,
-                    color=color
-                )
+            if sem_precomputed:
+                # Pre-computed SEM: aggregate by x
+                agg_data = data.groupby(x, as_index=False).agg({
+                    y: 'mean',
+                    sem_column: 'mean'
+                })
+                
+                line = ax.plot(agg_data[x], agg_data[y], label=label)[0]
+                
+                if agg_data[sem_column].notna().any():
+                    color = line.get_color()
+                    ax.fill_between(
+                        agg_data[x],
+                        agg_data[y] - agg_data[sem_column],
+                        agg_data[y] + agg_data[sem_column],
+                        alpha=0.2,
+                        color=color
+                    )
+            else:
+                # Computed SEM: group by sem_column first, then by x
+                grouped = data.groupby([sem_column, x], as_index=False)[y].mean()
+                # Compute mean and SEM across sem_column groups
+                stats = grouped.groupby(x)[y].agg(['mean', 'sem']).reset_index()
+                stats.columns = [x, 'mean_y', 'sem_y']
+                
+                line = ax.plot(stats[x], stats['mean_y'], label=label)[0]
+                
+                if stats['sem_y'].notna().any():
+                    color = line.get_color()
+                    ax.fill_between(
+                        stats[x],
+                        stats['mean_y'] - stats['sem_y'],
+                        stats['mean_y'] + stats['sem_y'],
+                        alpha=0.2,
+                        color=color
+                    )
         else:
             agg_data = data.groupby(x, as_index=False)[y].mean()
             ax.plot(agg_data[x], agg_data[y], label=label)

@@ -117,6 +117,7 @@ class MainWindow(QMainWindow):
         df = ds.dataframe  # type: ignore[attr-defined]
         x, y, hue = sel["x"], sel["y"], sel["hue"]
         sem_column = sel.get("sem_column")
+        sem_precomputed = sel.get("sem_precomputed", False)
         groups = sel.get("groups", [])
         hlines = sel.get("hlines", [])
         vlines = sel.get("vlines", [])
@@ -134,7 +135,7 @@ class MainWindow(QMainWindow):
             if sem_column:
                 # Use SEM-aware limits calculation
                 from plot_organizer.services.plot_service import shared_limits_with_sem
-                xlim, ylim = shared_limits_with_sem(df, filter_queries, x, y, sem_column, hue)
+                xlim, ylim = shared_limits_with_sem(df, filter_queries, x, y, sem_column, hue, sem_precomputed)
             else:
                 # Use original limits calculation
                 subsets = []
@@ -167,6 +168,7 @@ class MainWindow(QMainWindow):
                 y=y,
                 hue=hue,
                 sem_column=sem_column,
+                sem_precomputed=sem_precomputed,
                 title=title,
                 filter_query=fq,
                 xlim=xlim,

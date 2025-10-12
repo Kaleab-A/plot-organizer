@@ -36,6 +36,7 @@ pytest
 - ✅ Plot creation with x, y, hue, SEM column, groups, and reference lines
 - ✅ Reference lines (horizontal & vertical dashed lines)
 - ✅ SEM (Standard Error of the Mean) with shaded regions
+- ✅ Pre-computed SEM support (use SEM values directly from data)
 - ✅ Group faceting (multi-select columns, up to 50 combinations)
 - ✅ SEM-aware shared axes across grouped plots
 - ✅ Automatic aggregation of duplicate values

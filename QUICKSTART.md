@@ -30,6 +30,9 @@ python -m plot_organizer.app
      - **y**: e.g., `Number of employees`
      - **hue** (optional): e.g., `Country` (will color lines by category)
      - **SEM column** (optional): e.g., `subject` or `trial` (computes mean ± SEM with shaded region)
+       - **Pre-computed SEM** checkbox: Check this if your SEM column already contains pre-computed SEM values
+       - Unchecked: Groups data by SEM column, then computes mean and SEM across groups
+       - Checked: Uses SEM values directly from the column (for pre-aggregated data)
      - **Groups** (optional): Multi-select columns to create faceted plots (one plot per unique combination)
    - **Reference Lines** (optional):
      - **Horizontal**: Enter y-values separated by commas (e.g., `0, 50, 100`)
@@ -67,6 +70,7 @@ Using `organizations-10000.csv`:
 ✅ Plot dialog with x, y, hue, SEM column, groups, and reference lines  
 ✅ **Reference Lines**: Horizontal and vertical dashed lines for thresholds/markers  
 ✅ **SEM (Standard Error of the Mean)**: Shaded regions showing mean ± SEM  
+✅ **Pre-computed SEM**: Support for using pre-computed SEM values from a column  
 ✅ Group faceting (multi-select columns, cross-product expansion)  
 ✅ Shared axes across grouped plots (automatic, SEM-aware)  
 ✅ **Automatic aggregation**: Duplicate (x, hue) values are averaged for clean plots  

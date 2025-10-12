@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLineEdit,
     QPushButton,
+    QCheckBox,
 )
 
 
@@ -50,11 +51,19 @@ class QuickPlotDialog(QDialog):
         form.addRow("hue (optional)", self.hue_combo)
         form.addRow("SEM column (optional)", self.sem_combo)
         
+        # Add checkbox for pre-computed SEM
+        self.precomputed_sem_check = QCheckBox("Pre-computed SEM", self)
+        self.precomputed_sem_check.setChecked(False)
+        form.addRow("", self.precomputed_sem_check)
+        
         # Add info label about SEM
-        sem_info = QLabel("SEM column: Groups data before averaging, then shows mean ± SEM as shaded region")
-        sem_info.setWordWrap(True)
-        sem_info.setStyleSheet("color: gray; font-size: 9px;")
-        form.addRow("", sem_info)
+        self.sem_info = QLabel("SEM column: Groups data before averaging, then computes mean ± SEM as shaded region")
+        self.sem_info.setWordWrap(True)
+        self.sem_info.setStyleSheet("color: gray; font-size: 9px;")
+        form.addRow("", self.sem_info)
+        
+        # Update info label when checkbox changes
+        self.precomputed_sem_check.stateChanged.connect(self._update_sem_info)
 
         layout.addLayout(form)
         
@@ -127,6 +136,13 @@ class QuickPlotDialog(QDialog):
             self.combo_count_label.setText("")
         else:
             self.combo_count_label.setText(f"Selected {len(selected)} group column(s). Will compute cross-product.")
+    
+    def _update_sem_info(self) -> None:
+        """Update SEM info label based on checkbox state."""
+        if self.precomputed_sem_check.isChecked():
+            self.sem_info.setText("SEM column: Uses pre-computed SEM values from selected column")
+        else:
+            self.sem_info.setText("SEM column: Groups data before averaging, then computes mean ± SEM as shaded region")
 
     def selection(self) -> Optional[dict]:
         if self.result() != QDialog.Accepted:
@@ -163,6 +179,7 @@ class QuickPlotDialog(QDialog):
             "y": y,
             "hue": hue,
             "sem_column": sem,
+            "sem_precomputed": self.precomputed_sem_check.isChecked(),
             "groups": groups,
             "hlines": hlines,
             "vlines": vlines,
