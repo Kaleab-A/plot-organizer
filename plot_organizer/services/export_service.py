@@ -84,6 +84,16 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
     sem_column = tile._sem_column
     sem_precomputed = tile._sem_precomputed
     filter_query = tile._filter_query
+    style_line = tile._style_line
+    style_marker = tile._style_marker
+    
+    # Get format string for plotting
+    if style_line and style_marker:
+        fmt = '-o'  # Line with markers
+    elif style_marker:
+        fmt = 'o'   # Markers only
+    else:
+        fmt = '-'   # Line only (default)
     
     # Apply filter if present
     plot_df = df
@@ -101,7 +111,7 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
                     sem_column: 'mean'
                 })
                 
-                line = ax.plot(agg_data[x], agg_data[y], label=label)[0]
+                line = ax.plot(agg_data[x], agg_data[y], fmt, label=label)[0]
                 
                 if agg_data[sem_column].notna().any():
                     color = line.get_color()
@@ -119,7 +129,7 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
                 stats = grouped.groupby(x)[y].agg(['mean', 'sem']).reset_index()
                 stats.columns = [x, 'mean_y', 'sem_y']
                 
-                line = ax.plot(stats[x], stats['mean_y'], label=label)[0]
+                line = ax.plot(stats[x], stats['mean_y'], fmt, label=label)[0]
                 
                 if stats['sem_y'].notna().any():
                     color = line.get_color()
@@ -132,7 +142,7 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
                     )
         else:
             agg_data = data.groupby(x, as_index=False)[y].mean()
-            ax.plot(agg_data[x], agg_data[y], label=label)
+            ax.plot(agg_data[x], agg_data[y], fmt, label=label)
     
     # Apply aggregation with SEM
     if hue:

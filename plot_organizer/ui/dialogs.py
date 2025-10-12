@@ -64,6 +64,21 @@ class QuickPlotDialog(QDialog):
         
         # Update info label when checkbox changes
         self.precomputed_sem_check.stateChanged.connect(self._update_sem_info)
+        
+        # Plot style section
+        style_label = QLabel("Plot Style:")
+        style_label.setStyleSheet("font-weight: bold;")
+        form.addRow(style_label)
+        
+        self.style_line_check = QCheckBox("Line", self)
+        self.style_line_check.setChecked(True)  # Default: line
+        self.style_marker_check = QCheckBox("Markers", self)
+        self.style_marker_check.setChecked(False)  # Default: no markers
+        
+        style_layout = QHBoxLayout()
+        style_layout.addWidget(self.style_line_check)
+        style_layout.addWidget(self.style_marker_check)
+        form.addRow("", style_layout)
 
         layout.addLayout(form)
         
@@ -183,6 +198,8 @@ class QuickPlotDialog(QDialog):
             "groups": groups,
             "hlines": hlines,
             "vlines": vlines,
+            "style_line": self.style_line_check.isChecked(),
+            "style_marker": self.style_marker_check.isChecked(),
         }
     
     def _parse_numbers(self, text: str) -> list[float]:

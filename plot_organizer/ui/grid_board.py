@@ -36,6 +36,8 @@ class PlotTile(QFrame):
         self._filter_query: Optional[dict] = None
         self._hlines: list[float] = []
         self._vlines: list[float] = []
+        self._style_line: bool = True
+        self._style_marker: bool = False
         self.setContextMenuPolicy(Qt.DefaultContextMenu)
 
         layout = QVBoxLayout(self)
@@ -76,6 +78,8 @@ class PlotTile(QFrame):
         ylim: Optional[tuple[float, float]] = None,
         hlines: Optional[list[float]] = None,
         vlines: Optional[list[float]] = None,
+        style_line: bool = True,
+        style_marker: bool = False,
     ) -> None:
         self._df, self._x, self._y, self._hue = df, x, y, hue
         self._sem_column = sem_column
@@ -83,6 +87,8 @@ class PlotTile(QFrame):
         self._filter_query = filter_query
         self._hlines = hlines or []
         self._vlines = vlines or []
+        self._style_line = style_line
+        self._style_marker = style_marker
         
         # Apply filter if provided
         plot_df = df
@@ -124,6 +130,15 @@ class PlotTile(QFrame):
         
         self.canvas.draw_idle()
     
+    def _get_plot_format(self) -> str:
+        """Get the format string for plot() based on style settings."""
+        if self._style_line and self._style_marker:
+            return '-o'  # Line with markers
+        elif self._style_marker:
+            return 'o'   # Markers only
+        else:
+            return '-'   # Line only (default)
+    
     def _plot_with_sem(self, ax, df: pd.DataFrame, x: str, y: str, sem_column: Optional[str], label: Optional[str] = None) -> None:
         """Plot data with optional SEM shaded region.
         
@@ -146,8 +161,9 @@ class PlotTile(QFrame):
                 stats = grouped.groupby(x)[y].agg(['mean', 'sem']).reset_index()
                 stats.columns = [x, 'mean_y', 'sem_y']
                 
-                # Plot mean line
-                line = ax.plot(stats[x], stats['mean_y'], label=label)[0]
+                # Plot mean line with style
+                fmt = self._get_plot_format()
+                line = ax.plot(stats[x], stats['mean_y'], fmt, label=label)[0]
                 
                 # Plot SEM as shaded region
                 if stats['sem_y'].notna().any():
@@ -162,7 +178,8 @@ class PlotTile(QFrame):
         else:
             # No SEM: just aggregate by x and plot mean
             agg_df = df.groupby(x, as_index=False)[y].mean()
-            ax.plot(agg_df[x], agg_df[y], label=label)
+            fmt = self._get_plot_format()
+            ax.plot(agg_df[x], agg_df[y], fmt, label=label)
     
     def _plot_with_precomputed_sem(self, ax, df: pd.DataFrame, x: str, y: str, sem_column: str, label: Optional[str] = None) -> None:
         """Plot data with pre-computed SEM values from a column.
@@ -193,8 +210,9 @@ class PlotTile(QFrame):
                 f"Consider pre-aggregating your data."
             )
         
-        # Plot mean line
-        line = ax.plot(agg_df[x], agg_df[y], label=label)[0]
+        # Plot mean line with style
+        fmt = self._get_plot_format()
+        line = ax.plot(agg_df[x], agg_df[y], fmt, label=label)[0]
         
         # Plot SEM as shaded region
         if agg_df[sem_column].notna().any():
@@ -218,6 +236,8 @@ class PlotTile(QFrame):
         self._filter_query = None
         self._hlines = []
         self._vlines = []
+        self._style_line = True
+        self._style_marker = False
         self.figure.clear()
         self.canvas.draw_idle()
 
@@ -407,5 +427,21 @@ class GridBoard(QWidget):
         self._grid.addWidget(tile2, row1, col1, rowspan1, colspan1)
         
         return True, "Plots swapped successfully"
+    
+    def reset_to_size(self, rows: int, cols: int) -> None:
+        """Reset the grid to a specific size, removing all existing widgets."""
+        # Remove all existing widgets
+        while self._grid.count():
+            item = self._grid.takeAt(0)
+            if item and item.widget():
+                widget = item.widget()
+                widget.deleteLater()
+        
+        # Update dimensions
+        self._rows = rows
+        self._cols = cols
+        
+        # Repopulate with fresh empty tiles
+        self._populate()
 
 

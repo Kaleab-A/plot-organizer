@@ -71,6 +71,10 @@ class MainWindow(QMainWindow):
         remove_col.triggered.connect(self._action_remove_col)
         grid_menu.addAction(remove_row)
         grid_menu.addAction(remove_col)
+        grid_menu.addSeparator()
+        reset_grid = QAction("Reset Grid...", self)
+        reset_grid.triggered.connect(self._action_reset_grid)
+        grid_menu.addAction(reset_grid)
         
         export_menu = menubar.addMenu("Export")
         export_grid_action = QAction("Export Grid...", self)
@@ -121,6 +125,8 @@ class MainWindow(QMainWindow):
         groups = sel.get("groups", [])
         hlines = sel.get("hlines", [])
         vlines = sel.get("vlines", [])
+        style_line = sel.get("style_line", True)
+        style_marker = sel.get("style_marker", False)
         
         # Expand groups to create multiple plots
         try:
@@ -175,10 +181,12 @@ class MainWindow(QMainWindow):
                 ylim=ylim,
                 hlines=hlines,
                 vlines=vlines,
+                style_line=style_line,
+                style_marker=style_marker,
             )
             # Connect signals for new tiles
-            tile.settings_requested.connect(self._on_tile_settings)
-            tile.clear_requested.connect(self._on_tile_clear)
+            tile.settings_requested.connect(self._on_tile_settings, Qt.UniqueConnection)
+            tile.clear_requested.connect(self._on_tile_clear, Qt.UniqueConnection)
     
     def _connect_tile_signals(self) -> None:
         """Connect signals for all existing tiles."""
@@ -186,8 +194,8 @@ class MainWindow(QMainWindow):
             for c in range(self.grid_board._cols):
                 tile = self.grid_board.tile_at(r, c)
                 if tile:
-                    tile.settings_requested.connect(self._on_tile_settings)
-                    tile.clear_requested.connect(self._on_tile_clear)
+                    tile.settings_requested.connect(self._on_tile_settings, Qt.UniqueConnection)
+                    tile.clear_requested.connect(self._on_tile_clear, Qt.UniqueConnection)
     
     def _on_tile_settings(self, tile: PlotTile) -> None:
         """Handle settings request from a tile."""
@@ -281,6 +289,27 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(self, "Success", f"Column {col} removed.")
             else:
                 QMessageBox.warning(self, "Cannot Remove", "Column contains non-empty plots. Clear them first.")
+    
+    def _action_reset_grid(self) -> None:
+        """Reset the grid to default size and clear all plots."""
+        reply = QMessageBox.question(
+            self,
+            "Reset Grid",
+            "This will clear all plots and reset the grid to 2 rows × 3 columns. Continue?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            # Clear all plots first
+            for r in range(self.grid_board._rows):
+                for c in range(self.grid_board._cols):
+                    tile = self.grid_board.tile_at(r, c)
+                    if tile and not tile.is_empty():
+                        tile.clear_plot()
+            
+            # Reset to default size (2 rows, 3 cols)
+            self.grid_board.reset_to_size(2, 3)
+            QMessageBox.information(self, "Success", "Grid has been reset to 2×3 with all plots cleared.")
     
     def _action_export_grid(self) -> None:
         """Export the grid layout to a file."""

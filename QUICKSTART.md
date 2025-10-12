@@ -34,6 +34,10 @@ python -m plot_organizer.app
        - Unchecked: Groups data by SEM column, then computes mean and SEM across groups
        - Checked: Uses SEM values directly from the column (for pre-aggregated data)
      - **Groups** (optional): Multi-select columns to create faceted plots (one plot per unique combination)
+   - **Plot Style**:
+     - **Line**: Check for traditional line plot (default: checked)
+     - **Markers**: Check for scatter-style markers at data points (default: unchecked)
+     - You can enable both for line + markers, or just markers for a scatter-like appearance
    - **Reference Lines** (optional):
      - **Horizontal**: Enter y-values separated by commas (e.g., `0, 50, 100`)
      - **Vertical**: Enter x-values separated by commas (e.g., `2020, 2021, 2022`)
@@ -45,8 +49,10 @@ python -m plot_organizer.app
    - Plots now take maximum space with clean minimal UI
    - Each tile has its own independent Matplotlib canvas
 
-4. **Grow the Grid**:
+4. **Manage the Grid**:
    - Click **Grid → + Row** or **Grid → + Col** to add more space for plots
+   - Click **Grid → - Row...** or **Grid → - Col...** to remove empty rows/columns
+   - Click **Grid → Reset Grid...** to clear all plots and reset to default 2×3 size
    - Plots automatically place in the first empty tile
 
 ## Example with Test Data
@@ -67,7 +73,8 @@ Using `organizations-10000.csv`:
 ## What's Implemented
 
 ✅ CSV loading with automatic type inference  
-✅ Plot dialog with x, y, hue, SEM column, groups, and reference lines  
+✅ Plot dialog with x, y, hue, SEM column, groups, plot style, and reference lines  
+✅ **Plot Style**: Choose line, markers, or both for data visualization  
 ✅ **Reference Lines**: Horizontal and vertical dashed lines for thresholds/markers  
 ✅ **SEM (Standard Error of the Mean)**: Shaded regions showing mean ± SEM  
 ✅ **Pre-computed SEM**: Support for using pre-computed SEM values from a column  
@@ -77,6 +84,7 @@ Using `organizations-10000.csv`:
 ✅ **Plot settings**: Right-click plots to configure position and spanning (multi-cell plots)  
 ✅ **Context menu**: Right-click for settings, clear plot  
 ✅ **Remove rows/cols**: Grid → - Row/Col (only if empty)  
+✅ **Reset Grid**: Grid → Reset Grid to clear all plots and return to 2×3 default  
 ✅ **Export**: Whole-grid export to PDF/SVG/EPS/PNG with configurable size and DPI  
 ✅ Clean UI with maximized plot space  
 ✅ Dynamic grid growth  

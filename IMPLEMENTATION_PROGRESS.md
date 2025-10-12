@@ -1,13 +1,20 @@
 # Plot Organizer – Implementation Progress
 
-_Last updated: 2025-10-10_
+_Last updated: 2025-10-12_
 
-## ✅ Now Working (v0.7)
+## ✅ Now Working (v0.8)
 
-**Pre-computed SEM support + Reference lines + SEM plotting with proper axis scaling!**
+**Plot style customization (line, marker, both) + Pre-computed SEM support + Reference lines!**
 
 - **CSV Loading**: Data → Add CSV… loads a file, infers column types, and adds it to the Data Sources dock.
-- **Plot Creation**: Plot → Quick Plot… lets you pick a data source, x/y columns, optional hue, groups for faceting, and reference lines.
+- **Plot Creation**: Plot → Quick Plot… lets you pick a data source, x/y columns, optional hue, groups for faceting, reference lines, and plot style.
+- **Plot Style**: Choose how data is displayed:
+  - **Line only** (default): Traditional line plot
+  - **Markers only**: Scatter-style with markers at each data point
+  - **Line + Markers**: Combined line and markers for emphasis
+  - Works with hue, SEM, and grouped plots
+  - Style is preserved in exports
+  - **NEW in v0.8**: Full style customization support
 - **Reference Lines**: Optional horizontal and vertical reference lines:
   - Enter comma-separated values (e.g., "0, 50, 100")
   - Black dashed lines with 70% opacity
@@ -29,7 +36,7 @@ _Last updated: 2025-10-10_
 - **Plot Settings**: Right-click any plot → configure position (swap) OR spanning (change one at a time).
 - **Smart Swapping**: Position changes swap plots if spans match; validates and gives clear error messages if not.
 - **Context Menu**: Right-click plots for settings and clear options.
-- **Grid Management**: Add rows/cols via Grid menu; remove empty rows/cols with safety checks.
+- **Grid Management**: Add rows/cols via Grid menu; remove empty rows/cols with safety checks; reset grid to clear all plots and return to 2×3 default size.
 - **Clear Plots**: Remove plot data from cells (with confirmation).
 - **Export**: Export → Export Grid… saves entire layout to PDF/SVG/EPS/PNG with configurable size and DPI (includes SEM regions).
 - **Clean UI**: Plots now take maximum space with minimal margins.
