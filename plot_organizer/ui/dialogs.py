@@ -92,6 +92,47 @@ class QuickPlotDialog(QDialog):
         self.combo_count_label = QLabel("")
         layout.addWidget(self.combo_count_label)
         
+        # Y-axis limits section
+        ylim_group = QGroupBox("Y-axis Limits (optional)")
+        ylim_layout = QVBoxLayout()
+        
+        # Checkbox to enable custom y-limits
+        self.custom_ylim_check = QCheckBox("Use custom Y-axis limits", self)
+        self.custom_ylim_check.setChecked(False)
+        ylim_layout.addWidget(self.custom_ylim_check)
+        
+        # Y-axis min/max fields
+        ylim_form = QFormLayout()
+        self.ymin_spin = QDoubleSpinBox(self)
+        self.ymin_spin.setMinimum(-1e9)
+        self.ymin_spin.setMaximum(1e9)
+        self.ymin_spin.setValue(0.0)
+        self.ymin_spin.setDecimals(6)
+        self.ymin_spin.setEnabled(False)
+        ylim_form.addRow("Y-axis min:", self.ymin_spin)
+        
+        self.ymax_spin = QDoubleSpinBox(self)
+        self.ymax_spin.setMinimum(-1e9)
+        self.ymax_spin.setMaximum(1e9)
+        self.ymax_spin.setValue(1.0)
+        self.ymax_spin.setDecimals(6)
+        self.ymax_spin.setEnabled(False)
+        ylim_form.addRow("Y-axis max:", self.ymax_spin)
+        
+        ylim_layout.addLayout(ylim_form)
+        
+        # Info label
+        ylim_info = QLabel("Applied to all plots in this set")
+        ylim_info.setWordWrap(True)
+        ylim_info.setStyleSheet("color: gray; font-size: 9px;")
+        ylim_layout.addWidget(ylim_info)
+        
+        ylim_group.setLayout(ylim_layout)
+        layout.addWidget(ylim_group)
+        
+        # Connect checkbox to enable/disable spinboxes
+        self.custom_ylim_check.stateChanged.connect(self._toggle_ylim_fields)
+        
         # Reference lines section
         ref_lines_group = QGroupBox("Reference Lines (optional)")
         ref_lines_layout = QVBoxLayout()
@@ -158,6 +199,12 @@ class QuickPlotDialog(QDialog):
             self.sem_info.setText("SEM column: Uses pre-computed SEM values from selected column")
         else:
             self.sem_info.setText("SEM column: Groups data before averaging, then computes mean ± SEM as shaded region")
+    
+    def _toggle_ylim_fields(self) -> None:
+        """Enable/disable Y-axis limit spinboxes based on checkbox state."""
+        enabled = self.custom_ylim_check.isChecked()
+        self.ymin_spin.setEnabled(enabled)
+        self.ymax_spin.setEnabled(enabled)
 
     def selection(self) -> Optional[dict]:
         if self.result() != QDialog.Accepted:
@@ -188,6 +235,21 @@ class QuickPlotDialog(QDialog):
         hlines = self._parse_numbers(self.hlines_input.text())
         vlines = self._parse_numbers(self.vlines_input.text())
         
+        # Get custom y-limits if enabled
+        y_min = None
+        y_max = None
+        if self.custom_ylim_check.isChecked():
+            y_min = self.ymin_spin.value()
+            y_max = self.ymax_spin.value()
+            # Validate that min < max
+            if y_min >= y_max:
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.warning(
+                    self, "Invalid Y-limits",
+                    f"Y-axis min ({y_min}) must be less than Y-axis max ({y_max})."
+                )
+                return None
+        
         return {
             "datasource_id": self.ds_combo.currentData(),
             "x": x,
@@ -200,6 +262,8 @@ class QuickPlotDialog(QDialog):
             "vlines": vlines,
             "style_line": self.style_line_check.isChecked(),
             "style_marker": self.style_marker_check.isChecked(),
+            "y_min": y_min,
+            "y_max": y_max,
         }
     
     def _parse_numbers(self, text: str) -> list[float]:

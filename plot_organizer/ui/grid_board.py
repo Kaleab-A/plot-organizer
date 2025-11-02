@@ -38,6 +38,7 @@ class PlotTile(QFrame):
         self._vlines: list[float] = []
         self._style_line: bool = True
         self._style_marker: bool = False
+        self._ylim: Optional[tuple[float, float]] = None
         self.setContextMenuPolicy(Qt.DefaultContextMenu)
 
         layout = QVBoxLayout(self)
@@ -89,6 +90,7 @@ class PlotTile(QFrame):
         self._vlines = vlines or []
         self._style_line = style_line
         self._style_marker = style_marker
+        self._ylim = ylim  # Store y-limits for export
         
         # Apply filter if provided
         plot_df = df
@@ -238,6 +240,7 @@ class PlotTile(QFrame):
         self._vlines = []
         self._style_line = True
         self._style_marker = False
+        self._ylim = None
         self.figure.clear()
         self.canvas.draw_idle()
 

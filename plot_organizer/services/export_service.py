@@ -162,6 +162,10 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
     ax.set_ylabel(y, fontsize='small')
     ax.tick_params(labelsize='small')
     
+    # Apply stored y-limits if present
+    if tile._ylim is not None:
+        ax.set_ylim(tile._ylim)
+    
     # Draw reference lines
     for yval in tile._hlines:
         ax.axhline(y=yval, color='black', linestyle='--', linewidth=1, alpha=0.7, zorder=1)

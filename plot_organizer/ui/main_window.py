@@ -127,6 +127,8 @@ class MainWindow(QMainWindow):
         vlines = sel.get("vlines", [])
         style_line = sel.get("style_line", True)
         style_marker = sel.get("style_marker", False)
+        y_min = sel.get("y_min")
+        y_max = sel.get("y_max")
         
         # Expand groups to create multiple plots
         try:
@@ -137,7 +139,13 @@ class MainWindow(QMainWindow):
         
         # Compute shared axes if groups present
         xlim, ylim = None, None
-        if len(filter_queries) > 1:
+        
+        # Check if custom y-limits are provided
+        if y_min is not None and y_max is not None:
+            # Use custom y-limits for all plots
+            ylim = (y_min, y_max)
+        elif len(filter_queries) > 1:
+            # Auto-compute shared limits for multiple plots
             if sem_column:
                 # Use SEM-aware limits calculation
                 from plot_organizer.services.plot_service import shared_limits_with_sem
