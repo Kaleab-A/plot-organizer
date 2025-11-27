@@ -119,7 +119,8 @@ class MainWindow(QMainWindow):
             return
         
         df = ds.dataframe  # type: ignore[attr-defined]
-        x, y, hue = sel["x"], sel["y"], sel["hue"]
+        x, y = sel["x"], sel["y"]
+        hue = sel["hue"]  # Can be None, list of strings, or (for backward compat) a single string
         sem_column = sel.get("sem_column")
         sem_precomputed = sel.get("sem_precomputed", False)
         groups = sel.get("groups", [])

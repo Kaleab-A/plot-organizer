@@ -9,7 +9,7 @@ import pandas as pd
 def expand_groups(df: pd.DataFrame, groups: list[str]) -> list[dict[str, Any]]:
     """Return concrete equality filter dictionaries for the Cartesian product of group columns.
 
-    Caps the number of combinations at 50 to align with v1 UX constraints.
+    Caps the number of combinations at 100 to align with v1 UX constraints.
     """
     if not groups:
         return [{}]
@@ -17,8 +17,8 @@ def expand_groups(df: pd.DataFrame, groups: list[str]) -> list[dict[str, Any]]:
         sorted(df[g].dropna().unique().tolist()) for g in groups
     ]
     combos = [dict(zip(groups, vals)) for vals in itertools.product(*uniques)]
-    if len(combos) > 50:
-        raise ValueError("Too many combinations (>50). Reduce groups or categories.")
+    if len(combos) > 100:
+        raise ValueError("Too many combinations (>100). Reduce groups or categories.")
     return combos
 
 
@@ -57,7 +57,7 @@ def shared_limits_with_sem(
     x: str,
     y: str,
     sem_column: str | None,
-    hue: str | None = None,
+    hue: str | list[str] | None = None,
     sem_precomputed: bool = False,
 ) -> tuple[tuple[float, float], tuple[float, float]]:
     """Compute shared x/y limits accounting for SEM aggregation.
@@ -71,9 +71,25 @@ def shared_limits_with_sem(
     ymins: list[float] = []
     ymaxs: list[float] = []
     
+    # Create composite hue column if hue is a list
+    df_to_use = df
+    actual_hue = None
+    if hue:
+        if isinstance(hue, list) and len(hue) > 0:
+            # Create composite column with format: Col1=val1, Col2=val2
+            df_to_use = df.copy()
+            composite_name = "__composite_hue__"
+            df_to_use[composite_name] = df_to_use.apply(
+                lambda row: ", ".join(f"{col}={row[col]}" for col in hue),
+                axis=1
+            )
+            actual_hue = composite_name
+        elif isinstance(hue, str):
+            actual_hue = hue
+    
     for fq in filter_queries:
         # Apply filter
-        subset = df
+        subset = df_to_use
         for col, val in fq.items():
             subset = subset[subset[col] == val]
         
@@ -89,9 +105,9 @@ def shared_limits_with_sem(
         # Process y-axis with SEM aggregation if needed
         if sem_column and sem_column in subset.columns:
             # Apply same aggregation logic as plotting
-            if hue and hue in subset.columns:
+            if actual_hue and actual_hue in subset.columns:
                 # Group by hue first, then aggregate
-                for _, hue_sub in subset.groupby(hue):
+                for _, hue_sub in subset.groupby(actual_hue):
                     if sem_precomputed:
                         y_vals = _compute_precomputed_sem_stats(hue_sub, x, y, sem_column)
                     else:
@@ -109,8 +125,8 @@ def shared_limits_with_sem(
                     ymaxs.extend(y_vals[1])
         else:
             # No SEM: use aggregated means
-            if hue and hue in subset.columns:
-                for _, hue_sub in subset.groupby(hue):
+            if actual_hue and actual_hue in subset.columns:
+                for _, hue_sub in subset.groupby(actual_hue):
                     agg = hue_sub.groupby(x, as_index=False)[y].mean()
                     ynum = pd.to_numeric(agg[y], errors="coerce")
                     if ynum.notna().any():

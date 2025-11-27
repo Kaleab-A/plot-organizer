@@ -37,9 +37,9 @@ def test_expand_groups_two_columns():
 
 
 def test_expand_groups_exceeds_limit():
-    # Create a dataframe that would generate > 50 combinations
+    # Create a dataframe that would generate > 100 combinations
     df = pd.DataFrame({
-        "cat1": list(range(10)) * 10,
+        "cat1": list(range(20)) * 5,
         "cat2": [i % 10 for i in range(100)],
         "val": range(100)
     })

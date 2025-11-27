@@ -41,14 +41,11 @@ class QuickPlotDialog(QDialog):
 
         self.x_combo = QComboBox(self)
         self.y_combo = QComboBox(self)
-        self.hue_combo = QComboBox(self)
-        self.hue_combo.addItem("(none)", "")
         self.sem_combo = QComboBox(self)
         self.sem_combo.addItem("(none)", "")
         
         form.addRow("x", self.x_combo)
         form.addRow("y", self.y_combo)
-        form.addRow("hue (optional)", self.hue_combo)
         form.addRow("SEM column (optional)", self.sem_combo)
         
         # Add checkbox for pre-computed SEM
@@ -64,6 +61,16 @@ class QuickPlotDialog(QDialog):
         
         # Update info label when checkbox changes
         self.precomputed_sem_check.stateChanged.connect(self._update_sem_info)
+        
+        # Hue section (multi-select)
+        layout.addWidget(QLabel("Hue columns (multi-select, optional):"))
+        self.hue_list = QListWidget(self)
+        self.hue_list.setSelectionMode(QAbstractItemView.MultiSelection)
+        self.hue_list.setMaximumHeight(100)
+        layout.addWidget(self.hue_list)
+        
+        self.hue_count_label = QLabel("")
+        layout.addWidget(self.hue_count_label)
         
         # Plot style section
         style_label = QLabel("Plot Style:")
@@ -161,6 +168,7 @@ class QuickPlotDialog(QDialog):
 
         self.ds_combo.currentIndexChanged.connect(self._refresh_columns)
         self.group_list.itemSelectionChanged.connect(self._update_combo_count)
+        self.hue_list.itemSelectionChanged.connect(self._update_hue_count)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 
@@ -177,7 +185,6 @@ class QuickPlotDialog(QDialog):
                 box.addItem(c, c)
         fill(self.x_combo)
         fill(self.y_combo)
-        fill(self.hue_combo, allow_blank=True)
         fill(self.sem_combo, allow_blank=True)
         
         # Refresh group list
@@ -185,6 +192,12 @@ class QuickPlotDialog(QDialog):
         for c in cols:
             self.group_list.addItem(c)
         self._update_combo_count()
+        
+        # Refresh hue list
+        self.hue_list.clear()
+        for c in cols:
+            self.hue_list.addItem(c)
+        self._update_hue_count()
     
     def _update_combo_count(self) -> None:
         selected = [item.text() for item in self.group_list.selectedItems()]
@@ -192,6 +205,13 @@ class QuickPlotDialog(QDialog):
             self.combo_count_label.setText("")
         else:
             self.combo_count_label.setText(f"Selected {len(selected)} group column(s). Will compute cross-product.")
+    
+    def _update_hue_count(self) -> None:
+        selected = [item.text() for item in self.hue_list.selectedItems()]
+        if not selected:
+            self.hue_count_label.setText("")
+        else:
+            self.hue_count_label.setText(f"Selected {len(selected)} hue column(s). Will combine values for legend.")
     
     def _update_sem_info(self) -> None:
         """Update SEM info label based on checkbox state."""
@@ -210,16 +230,15 @@ class QuickPlotDialog(QDialog):
         if self.result() != QDialog.Accepted:
             return None
         groups = [item.text() for item in self.group_list.selectedItems()]
+        hue_cols = [item.text() for item in self.hue_list.selectedItems()]
         x = self.x_combo.currentData()
         y = self.y_combo.currentData()
-        hue = self.hue_combo.currentData() or None
         sem = self.sem_combo.currentData() or None
         
         # Validate SEM column doesn't conflict with other columns
         if sem:
             used_cols = {x, y}
-            if hue:
-                used_cols.add(hue)
+            used_cols.update(hue_cols)
             used_cols.update(groups)
             
             if sem in used_cols:
@@ -230,6 +249,22 @@ class QuickPlotDialog(QDialog):
                     "Please select a different column."
                 )
                 return None
+        
+        # Validate hue columns don't conflict with x, y, or groups
+        conflict_cols = {x, y}
+        conflict_cols.update(groups)
+        if sem:
+            conflict_cols.add(sem)
+        
+        hue_conflicts = set(hue_cols) & conflict_cols
+        if hue_conflicts:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self, "Invalid Hue Columns",
+                f"Hue column(s) {hue_conflicts} already used as x, y, group, or SEM.\n"
+                "Please select different columns."
+            )
+            return None
         
         # Parse reference lines
         hlines = self._parse_numbers(self.hlines_input.text())
@@ -254,7 +289,7 @@ class QuickPlotDialog(QDialog):
             "datasource_id": self.ds_combo.currentData(),
             "x": x,
             "y": y,
-            "hue": hue,
+            "hue": hue_cols if hue_cols else None,
             "sem_column": sem,
             "sem_precomputed": self.precomputed_sem_check.isChecked(),
             "groups": groups,

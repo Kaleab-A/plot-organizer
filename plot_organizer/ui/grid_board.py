@@ -30,7 +30,7 @@ class PlotTile(QFrame):
         self._df: Optional[pd.DataFrame] = None
         self._x: Optional[str] = None
         self._y: Optional[str] = None
-        self._hue: Optional[str] = None
+        self._hue: Optional[str | list[str]] = None
         self._sem_column: Optional[str] = None
         self._sem_precomputed: bool = False
         self._filter_query: Optional[dict] = None
@@ -70,7 +70,7 @@ class PlotTile(QFrame):
         df: pd.DataFrame, 
         x: str, 
         y: str, 
-        hue: Optional[str] = None,
+        hue: Optional[str | list[str]] = None,
         sem_column: Optional[str] = None,
         sem_precomputed: bool = False,
         title: Optional[str] = None,
@@ -93,19 +93,35 @@ class PlotTile(QFrame):
         self._ylim = ylim  # Store y-limits for export
         
         # Apply filter if provided
-        plot_df = df
+        plot_df = df.copy()  # Make a copy to avoid modifying original
         if filter_query:
             for col, val in filter_query.items():
                 plot_df = plot_df[plot_df[col] == val]
+        
+        # Create composite hue column if hue is a list of columns
+        actual_hue = None
+        if hue:
+            if isinstance(hue, list) and len(hue) > 0:
+                # Create composite column with format: Col1=val1, Col2=val2
+                composite_name = "__composite_hue__"
+                plot_df[composite_name] = plot_df.apply(
+                    lambda row: ", ".join(f"{col}={row[col]}" for col in hue),
+                    axis=1
+                )
+                actual_hue = composite_name
+            elif isinstance(hue, str):
+                # Single string hue (backward compatibility)
+                actual_hue = hue
+            # else: hue is empty list or None, actual_hue stays None
         
         ax = self.figure.subplots()
         ax.clear()
         
         if plot_df.empty:
             ax.text(0.5, 0.5, "No data", ha='center', va='center', transform=ax.transAxes, alpha=0.3)
-        elif hue:
+        elif actual_hue:
             # Group by hue and aggregate
-            for key, sub in plot_df.groupby(hue):
+            for key, sub in plot_df.groupby(actual_hue):
                 self._plot_with_sem(ax, sub, x, y, sem_column, label=str(key))
             ax.legend(loc="best", fontsize='small')
         else:
