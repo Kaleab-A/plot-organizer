@@ -1,5 +1,8 @@
 # Plot Organizer (Work in Progress)
 
+<!-- <img width="3584" height="2240" alt="image" src="https://github.com/user-attachments/assets/b4cf363e-43cf-464a-ab9e-629f869931cc" /> -->
+
+
 A desktop Python GUI (PySide6) to organize multiple line plots into a moveable grid, with CSV loading, customizable plot styles (line/markers), faceting by groups, shared axes, SEM (Standard Error of the Mean) plotting with shaded regions, reference lines for thresholds/markers, and export to PDF/SVG/EPS/PNG.
 
 ## Quick Start
