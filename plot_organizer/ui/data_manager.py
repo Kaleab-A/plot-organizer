@@ -47,5 +47,9 @@ class DataManagerDock(QDockWidget):
         row = self.list_widget.row(item)
         self.list_widget.takeItem(row)
         return ds_id
+    
+    def clear_all(self) -> None:
+        """Remove all data sources from the list."""
+        self.list_widget.clear()
 
 

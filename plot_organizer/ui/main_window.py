@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel, QFileDialog, QMessageBox, QDialog
@@ -10,6 +12,7 @@ from plot_organizer.ui.dialogs import QuickPlotDialog, PlotSettingsDialog, Expor
 from plot_organizer.services.load_service import load_csv_to_datasource
 from plot_organizer.services.plot_service import expand_groups, shared_limits
 from plot_organizer.services.export_service import export_grid
+from plot_organizer.services.project_service import save_workspace, load_workspace
 
 
 class MainWindow(QMainWindow):
@@ -30,6 +33,7 @@ class MainWindow(QMainWindow):
         self._datasources: dict[str, object] = {}
         self._ds_names: dict[str, str] = {}
         self._ds_columns: dict[str, list[str]] = {}
+        self._current_project_path: str | None = None
 
         # docks
         self.data_manager = DataManagerDock(self)
@@ -43,6 +47,24 @@ class MainWindow(QMainWindow):
     def _init_menu(self) -> None:
         menubar = self.menuBar()
         file_menu = menubar.addMenu("File")
+        
+        # Project actions
+        save_action = QAction("Save Project", self)
+        save_action.setShortcut("Ctrl+S")
+        save_action.triggered.connect(self._action_save_project)
+        file_menu.addAction(save_action)
+        
+        save_as_action = QAction("Save Project As...", self)
+        save_as_action.setShortcut("Ctrl+Shift+S")
+        save_as_action.triggered.connect(self._action_save_project_as)
+        file_menu.addAction(save_as_action)
+        
+        load_action = QAction("Load Project...", self)
+        load_action.setShortcut("Ctrl+O")
+        load_action.triggered.connect(self._action_load_project)
+        file_menu.addAction(load_action)
+        
+        file_menu.addSeparator()
         exit_action = QAction("Exit", self)
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
@@ -377,5 +399,182 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Export Successful", f"Grid exported to:\n{out_path}")
         except Exception as e:
             QMessageBox.critical(self, "Export Error", f"Failed to export grid:\n{str(e)}")
+    
+    def _action_save_project(self) -> None:
+        """Save project to current file or prompt for location if new."""
+        if self._current_project_path:
+            self._save_to_path(self._current_project_path)
+        else:
+            self._action_save_project_as()
+    
+    def _action_save_project_as(self) -> None:
+        """Save project to a new file."""
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Project",
+            "untitled.ppo",
+            "PlotOrganizer Projects (*.ppo);;All Files (*)"
+        )
+        if path:
+            self._save_to_path(path)
+    
+    def _save_to_path(self, path: str) -> None:
+        """Save current workspace state to file."""
+        try:
+            # Prepare datasource info
+            datasource_info = {}
+            for ds_id, ds in self._datasources.items():
+                datasource_info[ds_id] = {
+                    "name": self._ds_names.get(ds_id, "Unknown"),
+                    "path": ds.path,  # type: ignore
+                    "schema": [
+                        {
+                            "name": col.name,
+                            "dtype": col.dtype,
+                            "var_type": col.var_type,
+                            "categories": col.categories,
+                            "notes": col.notes,
+                        }
+                        for col in ds.schema  # type: ignore
+                    ],
+                }
+            
+            # Serialize grid layout
+            grid_layout = self.grid_board.serialize_layout(self._datasources)
+            
+            # Save to file with actual grid dimensions
+            save_workspace(
+                path,
+                grid_layout,
+                datasource_info,
+                grid_rows=self.grid_board._rows,
+                grid_cols=self.grid_board._cols
+            )
+            
+            self._current_project_path = path
+            self.setWindowTitle(f"Plot Organizer - {path}")
+            QMessageBox.information(self, "Success", f"Project saved to:\n{path}")
+        
+        except Exception as e:
+            QMessageBox.critical(self, "Save Error", f"Failed to save project:\n{str(e)}")
+    
+    def _action_load_project(self) -> None:
+        """Load project from file."""
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load Project",
+            "",
+            "PlotOrganizer Projects (*.ppo);;All Files (*)"
+        )
+        if path:
+            self.load_project_from_file(path)
+    
+    def load_project_from_file(self, path: str) -> bool:
+        """Load project from specified file path.
+        
+        Args:
+            path: Path to .ppo file
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Load workspace data
+            workspace = load_workspace(path)
+            
+            # Clear current state
+            self._clear_workspace()
+            
+            # Load data sources
+            missing_files = []
+            for ds_data in workspace.get("data_sources", []):
+                ds_path = ds_data["path"]
+                if not Path(ds_path).exists():
+                    missing_files.append(ds_path)
+                    continue
+                
+                try:
+                    ds = load_csv_to_datasource(ds_path)
+                    # Override ID and name from saved data
+                    ds.id = ds_data["id"]
+                    ds.name = ds_data["name"]
+                    
+                    self._datasources[ds.id] = ds
+                    self._ds_names[ds.id] = ds.name
+                    self._ds_columns[ds.id] = list(ds.dataframe.columns)
+                    self.data_manager.add_source(ds.id, ds.name)
+                
+                except Exception as e:
+                    QMessageBox.warning(
+                        self, "Data Source Error",
+                        f"Failed to load {ds_path}:\n{str(e)}"
+                    )
+                    continue
+            
+            if missing_files:
+                QMessageBox.warning(
+                    self, "Missing Files",
+                    f"The following files could not be found:\n\n" +
+                    "\n".join(missing_files)
+                )
+            
+            # Reset grid to saved dimensions
+            grid_info = workspace.get("grid", {})
+            rows = grid_info.get("rows", 2)
+            cols = grid_info.get("cols", 3)
+            self.grid_board.reset_to_size(rows, cols)
+            
+            # Reconstruct plots
+            for plot_data in workspace.get("plots", []):
+                ds_id = plot_data.get("datasource_id")
+                if not ds_id or ds_id not in self._datasources:
+                    continue
+                
+                ds = self._datasources[ds_id]
+                grid_pos = plot_data.get("grid_position", {})
+                row = grid_pos.get("row", 0)
+                col = grid_pos.get("col", 0)
+                rowspan = grid_pos.get("rowspan", 1)
+                colspan = grid_pos.get("colspan", 1)
+                
+                # Get tile and set plot
+                tile = self.grid_board.tile_at(row, col)
+                if tile:
+                    tile.set_plot_from_data(ds.dataframe, plot_data)  # type: ignore
+                    
+                    # Handle spanning if needed
+                    if rowspan > 1 or colspan > 1:
+                        self.grid_board.move_plot(row, col, row, col, rowspan, colspan)
+                    
+                    # Reconnect signals
+                    tile.settings_requested.connect(self._on_tile_settings, Qt.UniqueConnection)
+                    tile.clear_requested.connect(self._on_tile_clear, Qt.UniqueConnection)
+            
+            self._current_project_path = path
+            self.setWindowTitle(f"Plot Organizer - {path}")
+            QMessageBox.information(self, "Success", f"Project loaded from:\n{path}")
+            return True
+        
+        except Exception as e:
+            QMessageBox.critical(self, "Load Error", f"Failed to load project:\n{str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    def _clear_workspace(self) -> None:
+        """Clear all current state (data sources and plots)."""
+        # Clear all plots
+        for r in range(self.grid_board._rows):
+            for c in range(self.grid_board._cols):
+                tile = self.grid_board.tile_at(r, c)
+                if tile and not tile.is_empty():
+                    tile.clear_plot()
+        
+        # Clear data sources
+        self.data_manager.clear_all()
+        self._datasources.clear()
+        self._ds_names.clear()
+        self._ds_columns.clear()
+        self._current_project_path = None
 
 

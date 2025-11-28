@@ -259,6 +259,68 @@ class PlotTile(QFrame):
         self._ylim = None
         self.figure.clear()
         self.canvas.draw_idle()
+    
+    def get_plot_data(self, datasource_id: Optional[str] = None) -> Optional[dict]:
+        """Extract plot parameters for serialization.
+        
+        Args:
+            datasource_id: ID of the datasource (required for saving)
+        
+        Returns:
+            Dict of plot parameters or None if tile is empty
+        """
+        if self.is_empty():
+            return None
+        
+        # Get title from figure if it exists
+        title = None
+        if self.figure.axes:
+            title = self.figure.axes[0].get_title() or None
+        
+        return {
+            "datasource_id": datasource_id,
+            "x": self._x,
+            "y": self._y,
+            "hue": self._hue,  # Can be None, str, or list[str]
+            "sem_column": self._sem_column,
+            "sem_precomputed": self._sem_precomputed,
+            "filter_query": self._filter_query,
+            "hlines": self._hlines,
+            "vlines": self._vlines,
+            "style_line": self._style_line,
+            "style_marker": self._style_marker,
+            "ylim": list(self._ylim) if self._ylim else None,  # Convert tuple to list for JSON
+            "title": title,
+        }
+    
+    def set_plot_from_data(self, df: pd.DataFrame, plot_data: dict) -> None:
+        """Reconstruct plot from serialized data.
+        
+        Args:
+            df: DataFrame to plot (from datasource)
+            plot_data: Dict of plot parameters from get_plot_data()
+        """
+        # Convert ylim back to tuple if present
+        ylim = plot_data.get("ylim")
+        if ylim and isinstance(ylim, list) and len(ylim) == 2:
+            ylim = tuple(ylim)
+        
+        self.set_plot(
+            df=df,
+            x=plot_data["x"],
+            y=plot_data["y"],
+            hue=plot_data.get("hue"),
+            sem_column=plot_data.get("sem_column"),
+            sem_precomputed=plot_data.get("sem_precomputed", False),
+            title=plot_data.get("title"),
+            filter_query=plot_data.get("filter_query"),
+            xlim=None,  # xlim is computed, not saved
+            ylim=ylim,
+            hlines=plot_data.get("hlines", []),
+            vlines=plot_data.get("vlines", []),
+            style_line=plot_data.get("style_line", True),
+            style_marker=plot_data.get("style_marker", False),
+        )
 
 
 class GridBoard(QWidget):
@@ -462,5 +524,68 @@ class GridBoard(QWidget):
         
         # Repopulate with fresh empty tiles
         self._populate()
+    
+    def serialize_layout(self, datasources: dict[str, object]) -> list[dict]:
+        """Extract all non-empty plots with their grid positions.
+        
+        Args:
+            datasources: Map from datasource ID to datasource object {id: ds}
+        
+        Returns:
+            List of plot descriptors with grid_position and plot data
+        """
+        plots = []
+        processed = set()
+        
+        for r in range(self._rows):
+            for c in range(self._cols):
+                if (r, c) in processed:
+                    continue
+                
+                tile = self.tile_at(r, c)
+                if tile is None or tile.is_empty():
+                    continue
+                
+                # Get position and span
+                pos = self.find_tile_position(tile)
+                if pos is None:
+                    continue
+                
+                tile_row, tile_col, rowspan, colspan = pos
+                
+                # Mark cells as processed
+                for dr in range(rowspan):
+                    for dc in range(colspan):
+                        processed.add((tile_row + dr, tile_col + dc))
+                
+                # Skip if not at the starting position
+                if (r, c) != (tile_row, tile_col):
+                    continue
+                
+                # Find datasource ID by matching dataframe
+                datasource_id = None
+                for ds_id, ds_obj in datasources.items():
+                    if tile._df is ds_obj.dataframe:  # type: ignore
+                        datasource_id = ds_id
+                        break
+                
+                # Get plot data
+                plot_data = tile.get_plot_data(datasource_id=datasource_id)
+                if plot_data is None:
+                    continue
+                
+                # Add grid position
+                plot_descriptor = {
+                    "grid_position": {
+                        "row": tile_row,
+                        "col": tile_col,
+                        "rowspan": rowspan,
+                        "colspan": colspan,
+                    },
+                    **plot_data,
+                }
+                plots.append(plot_descriptor)
+        
+        return plots
 
 
