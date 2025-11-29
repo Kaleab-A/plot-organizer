@@ -117,6 +117,9 @@ def run_headless_export(
     from plot_organizer.services.export_service import export_grid
     from plot_organizer.ui.grid_board import GridBoard
     
+    # Create QApplication even in headless mode (required for Qt widgets)
+    app = QApplication([])
+    
     try:
         # Load workspace
         print(f"Loading project: {project_path}")
