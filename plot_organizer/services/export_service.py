@@ -7,6 +7,7 @@ matplotlib.use('Agg')  # Use non-interactive backend for export
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 import pandas as pd
+from matplotlib.ticker import AutoMinorLocator
 
 if TYPE_CHECKING:
     from plot_organizer.ui.grid_board import GridBoard, PlotTile
@@ -161,6 +162,10 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
     ax.set_xlabel(x, fontsize='small')
     ax.set_ylabel(y, fontsize='small')
     ax.tick_params(labelsize='small')
+
+    # Add minor x-ticks for a finer grid without extra labels (match UI)
+    ax.xaxis.set_minor_locator(AutoMinorLocator(5))  # 5 minor ticks between majors
+    ax.tick_params(axis='x', which='minor', length=3, labelbottom=False)
     
     # Apply stored y-limits if present
     if tile._ylim is not None:
@@ -172,6 +177,84 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
     
     for xval in tile._vlines:
         ax.axvline(x=xval, color='black', linestyle='--', linewidth=1, alpha=0.7, zorder=1)
+
+    # Draw error markers (if any), using the same semantics as PlotTile._render_error_markers
+    _render_error_markers_to_ax(tile, ax)
+
+
+def _render_error_markers_to_ax(tile: "PlotTile", ax) -> None:
+    """Render error bar markers from a PlotTile onto the given axis.
+    
+    Mirrors the behaviour of PlotTile._render_error_markers for exports.
+    """
+    # Some older tiles may not have this attribute; fail gracefully
+    error_markers = getattr(tile, "_error_markers", None)
+    if not error_markers:
+        return
+
+    # Get current axis limits for auto-positioning
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
+    x_range = xlim[1] - xlim[0]
+    y_range = ylim[1] - ylim[0]
+
+    # Track markers for stacking
+    x_markers: list[dict] = []  # Markers with xerr (stacked vertically)
+    y_markers: list[dict] = []  # Markers with yerr (stacked horizontally)
+
+    for marker in error_markers:
+        if marker.get("xerr") is not None:
+            x_markers.append(marker)
+        elif marker.get("yerr") is not None:
+            y_markers.append(marker)
+
+    # Render x-error markers (horizontal error bars)
+    for i, marker in enumerate(x_markers):
+        x_val = marker.get("x")
+        y_val = marker.get("y")
+        xerr = marker.get("xerr")
+        color = marker.get("color", "red")
+        label = marker.get("label")
+
+        # Auto-compute y position if not provided (stack from top)
+        if y_val is None:
+            y_val = ylim[1] - (0.05 + i * 0.08) * y_range
+
+        ax.errorbar(
+            x=x_val,
+            y=y_val,
+            xerr=xerr,
+            fmt="v",  # Triangle down marker
+            color=color,
+            capsize=3.5,
+            markersize=8,
+            label=label,
+            zorder=10,  # Render on top
+        )
+
+    # Render y-error markers (vertical error bars)
+    for i, marker in enumerate(y_markers):
+        x_val = marker.get("x")
+        y_val = marker.get("y")
+        yerr = marker.get("yerr")
+        color = marker.get("color", "red")
+        label = marker.get("label")
+
+        # Auto-compute x position if not provided (stack from right)
+        if x_val is None:
+            x_val = xlim[1] - (0.05 + i * 0.08) * x_range
+
+        ax.errorbar(
+            x=x_val,
+            y=y_val,
+            yerr=yerr,
+            fmt="v",  # Triangle down marker
+            color=color,
+            capsize=3.5,
+            markersize=8,
+            label=label,
+            zorder=10,  # Render on top
+        )
 
 
 def export_single(

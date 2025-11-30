@@ -610,3 +610,343 @@ class ExportDialog(QDialog):
         }
 
 
+class ErrorMarkerDialog(QDialog):
+    """Dialog to add a single error bar marker to a plot."""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Add Error Marker")
+        
+        layout = QVBoxLayout(self)
+        
+        # Info label
+        info = QLabel("Create an error bar marker annotation. At least one error bar (X or Y) is required.")
+        info.setWordWrap(True)
+        info.setStyleSheet("color: gray; font-size: 10px;")
+        layout.addWidget(info)
+        
+        # Form for marker parameters
+        form = QFormLayout()
+        
+        # Position fields
+        pos_group = QGroupBox("Position (auto-computed if blank)")
+        pos_layout = QFormLayout()
+        
+        self.x_input = QLineEdit(self)
+        self.x_input.setPlaceholderText("Auto-positioned")
+        pos_layout.addRow("X position:", self.x_input)
+        
+        self.y_input = QLineEdit(self)
+        self.y_input.setPlaceholderText("Auto-positioned")
+        pos_layout.addRow("Y position:", self.y_input)
+        
+        pos_group.setLayout(pos_layout)
+        layout.addWidget(pos_group)
+        
+        # Error bar fields
+        err_group = QGroupBox("Error Bars (at least one required)")
+        err_layout = QFormLayout()
+        
+        self.xerr_input = QLineEdit(self)
+        self.xerr_input.setPlaceholderText("Leave blank for no X error")
+        err_layout.addRow("X error (±):", self.xerr_input)
+        
+        self.yerr_input = QLineEdit(self)
+        self.yerr_input.setPlaceholderText("Leave blank for no Y error")
+        err_layout.addRow("Y error (±):", self.yerr_input)
+        
+        err_group.setLayout(err_layout)
+        layout.addWidget(err_group)
+        
+        # Style fields
+        style_group = QGroupBox("Appearance")
+        style_layout = QFormLayout()
+        
+        # Color picker
+        color_layout = QHBoxLayout()
+        self.color_input = QLineEdit(self)
+        self.color_input.setText("red")
+        self.color_input.setPlaceholderText("e.g., red, #FF0000, blue")
+        color_layout.addWidget(self.color_input)
+        
+        self.color_button = QPushButton("Choose Color", self)
+        self.color_button.clicked.connect(self._choose_color)
+        color_layout.addWidget(self.color_button)
+        
+        style_layout.addRow("Color:", color_layout)
+        
+        # Label field
+        self.label_input = QLineEdit(self)
+        self.label_input.setPlaceholderText("Optional legend label")
+        style_layout.addRow("Label:", self.label_input)
+        
+        style_group.setLayout(style_layout)
+        layout.addWidget(style_group)
+        
+        # Info about fixed parameters
+        fixed_info = QLabel("Fixed: Triangle marker (v), size=10, capsize=5")
+        fixed_info.setWordWrap(True)
+        fixed_info.setStyleSheet("color: gray; font-size: 9px; font-style: italic;")
+        layout.addWidget(fixed_info)
+        
+        # Buttons
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=self)
+        buttons.accepted.connect(self._validate_and_accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+    
+    def _choose_color(self) -> None:
+        """Open color picker dialog."""
+        from PySide6.QtWidgets import QColorDialog
+        from PySide6.QtGui import QColor
+        
+        # Parse current color
+        current_text = self.color_input.text()
+        current_color = QColor(current_text) if current_text else QColor("red")
+        
+        color = QColorDialog.getColor(current_color, self, "Choose Marker Color")
+        if color.isValid():
+            self.color_input.setText(color.name())
+    
+    def _validate_and_accept(self) -> None:
+        """Validate input before accepting."""
+        from PySide6.QtWidgets import QMessageBox
+        
+        # Check that at least one error bar is provided
+        xerr_text = self.xerr_input.text().strip()
+        yerr_text = self.yerr_input.text().strip()
+        
+        if not xerr_text and not yerr_text:
+            QMessageBox.warning(
+                self, "Missing Error Bar",
+                "At least one error bar (X or Y) is required."
+            )
+            return
+        
+        # Try to parse the error bars
+        try:
+            if xerr_text:
+                float(xerr_text)
+            if yerr_text:
+                float(yerr_text)
+        except ValueError:
+            QMessageBox.warning(
+                self, "Invalid Number",
+                "Error bar values must be valid numbers."
+            )
+            return
+        
+        # Try to parse position values if provided
+        x_text = self.x_input.text().strip()
+        y_text = self.y_input.text().strip()
+        
+        try:
+            if x_text:
+                float(x_text)
+            if y_text:
+                float(y_text)
+        except ValueError:
+            QMessageBox.warning(
+                self, "Invalid Number",
+                "Position values must be valid numbers."
+            )
+            return
+        
+        # Validate color
+        color_text = self.color_input.text().strip()
+        if not color_text:
+            QMessageBox.warning(
+                self, "Missing Color",
+                "Color is required."
+            )
+            return
+        
+        self.accept()
+    
+    def get_marker(self) -> Optional[dict]:
+        """Get the marker dictionary."""
+        if self.result() != QDialog.Accepted:
+            return None
+        
+        marker = {}
+        
+        # Position values (None if not provided)
+        x_text = self.x_input.text().strip()
+        y_text = self.y_input.text().strip()
+        
+        if x_text:
+            marker['x'] = float(x_text)
+        else:
+            marker['x'] = None
+        
+        if y_text:
+            marker['y'] = float(y_text)
+        else:
+            marker['y'] = None
+        
+        # Error bar values
+        xerr_text = self.xerr_input.text().strip()
+        yerr_text = self.yerr_input.text().strip()
+        
+        if xerr_text:
+            marker['xerr'] = float(xerr_text)
+        else:
+            marker['xerr'] = None
+        
+        if yerr_text:
+            marker['yerr'] = float(yerr_text)
+        else:
+            marker['yerr'] = None
+        
+        # Color
+        marker['color'] = self.color_input.text().strip()
+        
+        # Label (optional)
+        label_text = self.label_input.text().strip()
+        if label_text:
+            marker['label'] = label_text
+        else:
+            marker['label'] = None
+        
+        return marker
+
+
+class ErrorMarkersManagerDialog(QDialog):
+    """Dialog to view, edit, and delete error markers."""
+    
+    def __init__(self, parent=None, markers: list[dict] = None):
+        super().__init__(parent)
+        self.setWindowTitle("Manage Error Markers")
+        self.setMinimumWidth(500)
+        self.setMinimumHeight(400)
+        
+        self._markers = markers.copy() if markers else []
+        
+        layout = QVBoxLayout(self)
+        
+        # Info label
+        info = QLabel(f"Current markers: {len(self._markers)}")
+        layout.addWidget(info)
+        
+        # List widget to show markers
+        self.marker_list = QListWidget(self)
+        self._refresh_list()
+        layout.addWidget(self.marker_list)
+        
+        # Buttons for managing markers
+        button_layout = QHBoxLayout()
+        
+        self.add_button = QPushButton("Add Marker", self)
+        self.add_button.clicked.connect(self._add_marker)
+        button_layout.addWidget(self.add_button)
+        
+        self.edit_button = QPushButton("Edit Selected", self)
+        self.edit_button.clicked.connect(self._edit_marker)
+        button_layout.addWidget(self.edit_button)
+        
+        self.delete_button = QPushButton("Delete Selected", self)
+        self.delete_button.clicked.connect(self._delete_marker)
+        button_layout.addWidget(self.delete_button)
+        
+        layout.addLayout(button_layout)
+        
+        # Dialog buttons
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=self)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+    
+    def _refresh_list(self) -> None:
+        """Refresh the list widget with current markers."""
+        self.marker_list.clear()
+        for i, marker in enumerate(self._markers):
+            # Format marker info for display
+            parts = []
+            
+            if marker.get('x') is not None:
+                parts.append(f"x={marker['x']:.3f}")
+            else:
+                parts.append("x=auto")
+            
+            if marker.get('y') is not None:
+                parts.append(f"y={marker['y']:.3f}")
+            else:
+                parts.append("y=auto")
+            
+            if marker.get('xerr') is not None:
+                parts.append(f"xerr=±{marker['xerr']:.3f}")
+            
+            if marker.get('yerr') is not None:
+                parts.append(f"yerr=±{marker['yerr']:.3f}")
+            
+            parts.append(f"color={marker.get('color', 'red')}")
+            
+            if marker.get('label'):
+                parts.append(f"label='{marker['label']}'")
+            
+            display_text = ", ".join(parts)
+            self.marker_list.addItem(f"{i+1}. {display_text}")
+    
+    def _add_marker(self) -> None:
+        """Add a new marker."""
+        dialog = ErrorMarkerDialog(self)
+        dialog.exec()
+        marker = dialog.get_marker()
+        
+        if marker:
+            self._markers.append(marker)
+            self._refresh_list()
+    
+    def _edit_marker(self) -> None:
+        """Edit the selected marker."""
+        from PySide6.QtWidgets import QMessageBox
+        
+        selected_items = self.marker_list.selectedItems()
+        if not selected_items:
+            QMessageBox.information(self, "No Selection", "Please select a marker to edit.")
+            return
+        
+        index = self.marker_list.row(selected_items[0])
+        marker = self._markers[index]
+        
+        # Create dialog pre-filled with current values
+        dialog = ErrorMarkerDialog(self)
+        if marker.get('x') is not None:
+            dialog.x_input.setText(str(marker['x']))
+        if marker.get('y') is not None:
+            dialog.y_input.setText(str(marker['y']))
+        if marker.get('xerr') is not None:
+            dialog.xerr_input.setText(str(marker['xerr']))
+        if marker.get('yerr') is not None:
+            dialog.yerr_input.setText(str(marker['yerr']))
+        dialog.color_input.setText(marker.get('color', 'red'))
+        if marker.get('label'):
+            dialog.label_input.setText(marker['label'])
+        
+        dialog.exec()
+        updated_marker = dialog.get_marker()
+        
+        if updated_marker:
+            self._markers[index] = updated_marker
+            self._refresh_list()
+    
+    def _delete_marker(self) -> None:
+        """Delete the selected marker."""
+        from PySide6.QtWidgets import QMessageBox
+        
+        selected_items = self.marker_list.selectedItems()
+        if not selected_items:
+            QMessageBox.information(self, "No Selection", "Please select a marker to delete.")
+            return
+        
+        index = self.marker_list.row(selected_items[0])
+        del self._markers[index]
+        self._refresh_list()
+    
+    def get_markers(self) -> Optional[list[dict]]:
+        """Get the updated list of markers."""
+        if self.result() != QDialog.Accepted:
+            return None
+        return self._markers
+
+

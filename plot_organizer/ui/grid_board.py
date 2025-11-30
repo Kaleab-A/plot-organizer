@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import pandas as pd
+from matplotlib.ticker import AutoMinorLocator
 
 
 class PlotTile(QFrame):
@@ -39,6 +40,7 @@ class PlotTile(QFrame):
         self._style_line: bool = True
         self._style_marker: bool = False
         self._ylim: Optional[tuple[float, float]] = None
+        self._error_markers: list[dict] = []
         self.setContextMenuPolicy(Qt.DefaultContextMenu)
 
         layout = QVBoxLayout(self)
@@ -59,6 +61,11 @@ class PlotTile(QFrame):
         menu.addAction(settings_action)
         
         if not self.is_empty():
+            # Add error markers option
+            markers_action = QAction("Manage Error Markers...", self)
+            markers_action.triggered.connect(self._open_markers_dialog)
+            menu.addAction(markers_action)
+            
             clear_action = QAction("Clear Plot", self)
             clear_action.triggered.connect(lambda: self.clear_requested.emit(self))
             menu.addAction(clear_action)
@@ -81,6 +88,7 @@ class PlotTile(QFrame):
         vlines: Optional[list[float]] = None,
         style_line: bool = True,
         style_marker: bool = False,
+        error_markers: Optional[list[dict]] = None,
     ) -> None:
         self._df, self._x, self._y, self._hue = df, x, y, hue
         self._sem_column = sem_column
@@ -91,6 +99,7 @@ class PlotTile(QFrame):
         self._style_line = style_line
         self._style_marker = style_marker
         self._ylim = ylim  # Store y-limits for export
+        self._error_markers = error_markers or []
         
         # Apply filter if provided
         plot_df = df.copy()  # Make a copy to avoid modifying original
@@ -114,8 +123,12 @@ class PlotTile(QFrame):
                 actual_hue = hue
             # else: hue is empty list or None, actual_hue stays None
         
-        ax = self.figure.subplots()
-        ax.clear()
+        # Reuse existing axes if available, otherwise create new one
+        if self.figure.axes:
+            ax = self.figure.axes[0]
+            ax.clear()
+        else:
+            ax = self.figure.subplots()
         
         if plot_df.empty:
             ax.text(0.5, 0.5, "No data", ha='center', va='center', transform=ax.transAxes, alpha=0.3)
@@ -133,6 +146,10 @@ class PlotTile(QFrame):
         ax.set_xlabel(x, fontsize='small')
         ax.set_ylabel(y, fontsize='small')
         ax.tick_params(labelsize='small')
+
+        # Add minor x-ticks for a finer grid without extra labels
+        ax.xaxis.set_minor_locator(AutoMinorLocator(5))  # 5 minor ticks between majors
+        ax.tick_params(axis='x', which='minor', length=3, labelbottom=False)
         
         if xlim:
             ax.set_xlim(xlim)
@@ -145,6 +162,9 @@ class PlotTile(QFrame):
         
         for xval in self._vlines:
             ax.axvline(x=xval, color='black', linestyle='--', linewidth=1, alpha=0.7, zorder=1)
+        
+        # Draw error markers
+        self._render_error_markers(ax, plot_df)
         
         self.canvas.draw_idle()
     
@@ -243,6 +263,116 @@ class PlotTile(QFrame):
                 color=color
             )
     
+    def _render_error_markers(self, ax, plot_df: pd.DataFrame) -> None:
+        """Render error bar markers on the plot.
+        
+        Auto-computes missing x or y positions and stacks multiple markers.
+        Each marker dict can have: x, y, xerr, yerr, color, label
+        """
+        if not self._error_markers:
+            return
+        
+        import numpy as np
+        
+        # Get current axis limits for auto-positioning
+        xlim = ax.get_xlim()
+        ylim = ax.get_ylim()
+        x_range = xlim[1] - xlim[0]
+        y_range = ylim[1] - ylim[0]
+        
+        # Track markers for stacking
+        x_markers = []  # Markers with xerr (positioned along y-axis)
+        y_markers = []  # Markers with yerr (positioned along x-axis)
+        
+        for marker in self._error_markers:
+            if marker.get('xerr') is not None:
+                x_markers.append(marker)
+            elif marker.get('yerr') is not None:
+                y_markers.append(marker)
+        
+        # Render x-error markers (horizontal error bars)
+        for i, marker in enumerate(x_markers):
+            x_val = marker.get('x')
+            y_val = marker.get('y')
+            xerr = marker.get('xerr')
+            color = marker.get('color', 'red')
+            label = marker.get('label')
+            
+            # Auto-compute y position if not provided (stack from top)
+            if y_val is None:
+                y_val = ylim[1] - (0.05 + i * 0.08) * y_range
+            
+            ax.errorbar(
+                x=x_val,
+                y=y_val,
+                xerr=xerr,
+                fmt='v',  # Triangle down marker
+                color=color,
+                capsize=3.5,
+                markersize=8,
+                label=label,
+                zorder=10  # Render on top
+            )
+        
+        # Render y-error markers (vertical error bars)
+        for i, marker in enumerate(y_markers):
+            x_val = marker.get('x')
+            y_val = marker.get('y')
+            yerr = marker.get('yerr')
+            color = marker.get('color', 'red')
+            label = marker.get('label')
+            
+            # Auto-compute x position if not provided (stack from right)
+            if x_val is None:
+                x_val = xlim[1] - (0.05 + i * 0.08) * x_range
+            
+            ax.errorbar(
+                x=x_val,
+                y=y_val,
+                yerr=yerr,
+                fmt='v',  # Triangle down marker
+                color=color,
+                capsize=3.5,
+                markersize=8,
+                label=label,
+                zorder=10  # Render on top
+            )
+    
+    def _open_markers_dialog(self) -> None:
+        """Open dialog to manage error markers."""
+        from plot_organizer.ui.dialogs import ErrorMarkersManagerDialog
+        
+        dialog = ErrorMarkersManagerDialog(self, markers=self._error_markers)
+        dialog.exec()
+        updated_markers = dialog.get_markers()
+        
+        if updated_markers is not None:
+            # Update markers and refresh plot
+            self._error_markers = updated_markers
+            # Re-render the plot with updated markers
+            if self._df is not None and self._x and self._y:
+                # Preserve the current title
+                title = None
+                if self.figure.axes:
+                    title = self.figure.axes[0].get_title() or None
+                
+                self.set_plot(
+                    df=self._df,
+                    x=self._x,
+                    y=self._y,
+                    hue=self._hue,
+                    sem_column=self._sem_column,
+                    sem_precomputed=self._sem_precomputed,
+                    title=title,
+                    filter_query=self._filter_query,
+                    hlines=self._hlines,
+                    vlines=self._vlines,
+                    style_line=self._style_line,
+                    style_marker=self._style_marker,
+                    ylim=self._ylim,
+                    error_markers=self._error_markers,
+                )
+    
     def clear_plot(self) -> None:
         """Clear the plot data and reset to empty state."""
         self._df = None
@@ -257,6 +387,7 @@ class PlotTile(QFrame):
         self._style_line = True
         self._style_marker = False
         self._ylim = None
+        self._error_markers = []
         self.figure.clear()
         self.canvas.draw_idle()
     
@@ -291,6 +422,7 @@ class PlotTile(QFrame):
             "style_marker": self._style_marker,
             "ylim": list(self._ylim) if self._ylim else None,  # Convert tuple to list for JSON
             "title": title,
+            "error_markers": self._error_markers,
         }
     
     def set_plot_from_data(self, df: pd.DataFrame, plot_data: dict) -> None:
@@ -320,6 +452,7 @@ class PlotTile(QFrame):
             vlines=plot_data.get("vlines", []),
             style_line=plot_data.get("style_line", True),
             style_marker=plot_data.get("style_marker", False),
+            error_markers=plot_data.get("error_markers", []),
         )
 
 

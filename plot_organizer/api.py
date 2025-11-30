@@ -78,6 +78,7 @@ def create_plot(
     style_marker: bool = False,
     ylim: tuple[float, float] | list[float] | None = None,
     title: str | None = None,
+    error_markers: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Create a plot descriptor.
     
@@ -102,9 +103,25 @@ def create_plot(
         style_marker: Show markers (default: False)
         ylim: Y-axis limits as (min, max) tuple or list
         title: Plot title
+        error_markers: List of error bar marker dicts. Each dict should have:
+            - x, y: position values (at least one required, others auto-computed)
+            - xerr, yerr: error bar widths (at least one required)
+            - color: marker color (required)
+            - label: optional label for legend
     
     Returns:
         Plot dict with all parameters and grid position
+    
+    Example:
+        >>> plot = create_plot(
+        ...     ds_id,
+        ...     x="time",
+        ...     y="accuracy",
+        ...     error_markers=[
+        ...         {"x": 5.0, "xerr": 0.5, "color": "red", "label": "Event 1"},
+        ...         {"x": 10.0, "xerr": 0.3, "color": "blue", "label": "Event 2"}
+        ...     ]
+        ... )
     """
     plot_data = {
         "id": str(uuid.uuid4()),
@@ -127,6 +144,7 @@ def create_plot(
         "style_marker": style_marker,
         "ylim": list(ylim) if ylim else None,
         "title": title,
+        "error_markers": error_markers or [],
     }
     return plot_data
 
@@ -201,6 +219,7 @@ def create_grouped_plots(
     style_line: bool = True,
     style_marker: bool = False,
     ylim: tuple[float, float] | list[float] | None = None,
+    error_markers: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Create multiple plots from group columns with shared y-axis limits.
     
@@ -225,6 +244,7 @@ def create_grouped_plots(
         style_line: Show lines
         style_marker: Show markers
         ylim: Manual y-limits (if None, auto-computed and shared)
+        error_markers: List of error bar markers to add to each plot
     
     Returns:
         List of plot dicts with auto-computed positions and shared ylim
@@ -307,6 +327,7 @@ def create_grouped_plots(
             style_marker=style_marker,
             ylim=ylim,
             title=title,
+            error_markers=error_markers,
         )
         plots.append(plot)
     
