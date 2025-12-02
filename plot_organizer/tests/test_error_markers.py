@@ -269,6 +269,134 @@ def test_error_markers_in_grouped_plots():
         Path(csv_path).unlink()
 
 
+def test_error_markers_with_different_shapes():
+    """Test that different marker shapes are supported in API."""
+    ds = create_datasource("test", "dummy.csv")
+    
+    # Test various marker shapes
+    markers = [
+        {"x": 1.0, "xerr": 0.1, "marker": "v", "color": "red", "label": "Triangle Down"},
+        {"x": 2.0, "xerr": 0.1, "marker": "^", "color": "blue", "label": "Triangle Up"},
+        {"x": 3.0, "xerr": 0.1, "marker": "o", "color": "green", "label": "Circle"},
+        {"x": 4.0, "xerr": 0.1, "marker": "s", "color": "orange", "label": "Square"},
+        {"x": 5.0, "xerr": 0.1, "marker": "D", "color": "purple", "label": "Diamond"},
+        {"x": 6.0, "xerr": 0.1, "marker": "*", "color": "brown", "label": "Star"},
+    ]
+    
+    plot = create_plot(
+        ds["id"],
+        x="time",
+        y="accuracy",
+        error_markers=markers
+    )
+    
+    assert "error_markers" in plot
+    assert len(plot["error_markers"]) == 6
+    
+    # Verify each marker has the correct shape
+    assert plot["error_markers"][0]["marker"] == "v"
+    assert plot["error_markers"][1]["marker"] == "^"
+    assert plot["error_markers"][2]["marker"] == "o"
+    assert plot["error_markers"][3]["marker"] == "s"
+    assert plot["error_markers"][4]["marker"] == "D"
+    assert plot["error_markers"][5]["marker"] == "*"
+
+
+def test_error_markers_backward_compatibility():
+    """Test that markers without 'marker' field default to 'v' for backward compatibility."""
+    try:
+        from PySide6.QtWidgets import QApplication
+        import sys
+        
+        # Create QApplication if not exists
+        app = QApplication.instance()
+        if app is None:
+            app = QApplication(sys.argv)
+        
+        from plot_organizer.ui.grid_board import PlotTile
+        
+        # Create test data
+        df = pd.DataFrame({
+            "time": [1, 2, 3, 4, 5],
+            "accuracy": [0.5, 0.6, 0.7, 0.8, 0.9]
+        })
+        
+        # Create tile with markers that don't have 'marker' field (backward compatibility)
+        tile = PlotTile()
+        error_markers = [
+            {"x": 2.5, "xerr": 0.5, "color": "red", "label": "Old Format"},
+        ]
+        
+        tile.set_plot(
+            df=df,
+            x="time",
+            y="accuracy",
+            error_markers=error_markers
+        )
+        
+        # Verify markers are stored and rendering doesn't crash
+        assert tile._error_markers == error_markers
+        assert len(tile._error_markers) == 1
+        # The rendering should default to 'v' internally even though not specified
+        
+    except ImportError:
+        pytest.skip("PySide6 not available for rendering test")
+
+
+def test_error_markers_shape_save_load():
+    """Test that marker shapes are preserved through save/load cycle."""
+    # Create a temporary CSV file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        f.write("time,accuracy\n")
+        f.write("1,0.5\n")
+        f.write("2,0.7\n")
+        f.write("3,0.9\n")
+        csv_path = f.name
+    
+    try:
+        # Create project with markers having different shapes
+        ds = create_datasource("test", csv_path)
+        plot = create_plot(
+            ds["id"],
+            x="time",
+            y="accuracy",
+            error_markers=[
+                {"x": 1.5, "xerr": 0.2, "marker": "^", "color": "red", "label": "Triangle Up"},
+                {"x": 2.5, "xerr": 0.3, "marker": "o", "color": "blue", "label": "Circle"},
+            ]
+        )
+        project = create_project((2, 2), [ds], [plot])
+        
+        # Save to file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.ppo', delete=False) as f:
+            project_path = f.name
+        
+        save_project_file(project, project_path)
+        
+        # Load back
+        loaded_project = load_project_file(project_path)
+        
+        # Verify marker shapes are preserved
+        assert len(loaded_project["plots"]) == 1
+        loaded_plot = loaded_project["plots"][0]
+        assert "error_markers" in loaded_plot
+        assert len(loaded_plot["error_markers"]) == 2
+        
+        marker1 = loaded_plot["error_markers"][0]
+        assert marker1["marker"] == "^"
+        assert marker1["color"] == "red"
+        
+        marker2 = loaded_plot["error_markers"][1]
+        assert marker2["marker"] == "o"
+        assert marker2["color"] == "blue"
+        
+        # Cleanup
+        Path(project_path).unlink()
+    
+    finally:
+        Path(csv_path).unlink()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
 

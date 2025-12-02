@@ -215,6 +215,7 @@ def _render_error_markers_to_ax(tile: "PlotTile", ax) -> None:
         xerr = marker.get("xerr")
         color = marker.get("color", "red")
         label = marker.get("label")
+        marker_shape = marker.get("marker", "v")  # Default to triangle down
 
         # Auto-compute y position if not provided (stack from top)
         if y_val is None:
@@ -224,7 +225,7 @@ def _render_error_markers_to_ax(tile: "PlotTile", ax) -> None:
             x=x_val,
             y=y_val,
             xerr=xerr,
-            fmt="v",  # Triangle down marker
+            fmt=marker_shape,
             color=color,
             capsize=3.5,
             markersize=8,
@@ -239,6 +240,7 @@ def _render_error_markers_to_ax(tile: "PlotTile", ax) -> None:
         yerr = marker.get("yerr")
         color = marker.get("color", "red")
         label = marker.get("label")
+        marker_shape = marker.get("marker", "v")  # Default to triangle down
 
         # Auto-compute x position if not provided (stack from right)
         if x_val is None:
@@ -248,7 +250,7 @@ def _render_error_markers_to_ax(tile: "PlotTile", ax) -> None:
             x=x_val,
             y=y_val,
             yerr=yerr,
-            fmt="v",  # Triangle down marker
+            fmt=marker_shape,
             color=color,
             capsize=3.5,
             markersize=8,

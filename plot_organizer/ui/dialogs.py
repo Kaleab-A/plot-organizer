@@ -662,6 +662,20 @@ class ErrorMarkerDialog(QDialog):
         style_group = QGroupBox("Appearance")
         style_layout = QFormLayout()
         
+        # Marker shape selector
+        self.marker_combo = QComboBox(self)
+        self.marker_combo.addItem("Triangle Down (v)", "v")
+        self.marker_combo.addItem("Triangle Up (^)", "^")
+        self.marker_combo.addItem("Circle (o)", "o")
+        self.marker_combo.addItem("Square (s)", "s")
+        self.marker_combo.addItem("Diamond (D)", "D")
+        self.marker_combo.addItem("Star (*)", "*")
+        self.marker_combo.addItem("X mark (x)", "x")
+        self.marker_combo.addItem("Plus (+)", "+")
+        self.marker_combo.addItem("Triangle Left (<)", "<")
+        self.marker_combo.addItem("Triangle Right (>)", ">")
+        style_layout.addRow("Marker shape:", self.marker_combo)
+        
         # Color picker
         color_layout = QHBoxLayout()
         self.color_input = QLineEdit(self)
@@ -684,7 +698,7 @@ class ErrorMarkerDialog(QDialog):
         layout.addWidget(style_group)
         
         # Info about fixed parameters
-        fixed_info = QLabel("Fixed: Triangle marker (v), size=10, capsize=5")
+        fixed_info = QLabel("Fixed: size=8, capsize=3.5")
         fixed_info.setWordWrap(True)
         fixed_info.setStyleSheet("color: gray; font-size: 9px; font-style: italic;")
         layout.addWidget(fixed_info)
@@ -798,6 +812,9 @@ class ErrorMarkerDialog(QDialog):
         else:
             marker['yerr'] = None
         
+        # Marker shape
+        marker['marker'] = self.marker_combo.currentData()
+        
         # Color
         marker['color'] = self.color_input.text().strip()
         
@@ -879,6 +896,7 @@ class ErrorMarkersManagerDialog(QDialog):
             if marker.get('yerr') is not None:
                 parts.append(f"yerr=±{marker['yerr']:.3f}")
             
+            parts.append(f"marker={marker.get('marker', 'v')}")
             parts.append(f"color={marker.get('color', 'red')}")
             
             if marker.get('label'):
@@ -919,6 +937,13 @@ class ErrorMarkersManagerDialog(QDialog):
             dialog.xerr_input.setText(str(marker['xerr']))
         if marker.get('yerr') is not None:
             dialog.yerr_input.setText(str(marker['yerr']))
+        
+        # Set marker shape
+        marker_shape = marker.get('marker', 'v')
+        index = dialog.marker_combo.findData(marker_shape)
+        if index >= 0:
+            dialog.marker_combo.setCurrentIndex(index)
+        
         dialog.color_input.setText(marker.get('color', 'red'))
         if marker.get('label'):
             dialog.label_input.setText(marker['label'])

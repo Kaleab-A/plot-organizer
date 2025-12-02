@@ -106,6 +106,8 @@ def create_plot(
         error_markers: List of error bar marker dicts. Each dict should have:
             - x, y: position values (at least one required, others auto-computed)
             - xerr, yerr: error bar widths (at least one required)
+            - marker: marker shape (default: 'v' for triangle down)
+                Available: 'v', '^', 'o', 's', 'D', '*', 'x', '+', '<', '>'
             - color: marker color (required)
             - label: optional label for legend
     
@@ -118,8 +120,8 @@ def create_plot(
         ...     x="time",
         ...     y="accuracy",
         ...     error_markers=[
-        ...         {"x": 5.0, "xerr": 0.5, "color": "red", "label": "Event 1"},
-        ...         {"x": 10.0, "xerr": 0.3, "color": "blue", "label": "Event 2"}
+        ...         {"x": 5.0, "xerr": 0.5, "marker": "v", "color": "red", "label": "Event 1"},
+        ...         {"x": 10.0, "xerr": 0.3, "marker": "^", "color": "blue", "label": "Event 2"}
         ...     ]
         ... )
     """

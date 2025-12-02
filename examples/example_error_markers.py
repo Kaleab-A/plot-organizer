@@ -56,6 +56,7 @@ try:
             {
                 "x": 3.5,
                 "xerr": 0.5,  # ±0.5 time units
+                "marker": "v",  # Triangle down
                 "color": "red",
                 "label": "Checkpoint Saved"
             },
@@ -63,6 +64,7 @@ try:
             {
                 "x": 5.2,
                 "xerr": 0.3,
+                "marker": "^",  # Triangle up
                 "color": "blue",
                 "label": "Learning Rate Drop"
             }
@@ -84,6 +86,7 @@ try:
             {
                 "y": 1.0,
                 "yerr": 0.1,  # ±0.1 loss units
+                "marker": "o",  # Circle
                 "color": "green",
                 "label": "Target Loss"
             }
@@ -102,10 +105,10 @@ try:
         colspan=2,
         title="Accuracy with Multiple Event Markers (Stacked)",
         error_markers=[
-            # These will be auto-positioned vertically and stacked
-            {"x": 2.0, "xerr": 0.2, "color": "red", "label": "Event 1"},
-            {"x": 4.0, "xerr": 0.3, "color": "orange", "label": "Event 2"},
-            {"x": 6.0, "xerr": 0.2, "color": "purple", "label": "Event 3"},
+            # These will be auto-positioned vertically and stacked with different shapes
+            {"x": 2.0, "xerr": 0.2, "marker": "s", "color": "red", "label": "Event 1"},
+            {"x": 4.0, "xerr": 0.3, "marker": "D", "color": "orange", "label": "Event 2"},
+            {"x": 6.0, "xerr": 0.2, "marker": "*", "color": "purple", "label": "Event 3"},
         ]
     )
     
@@ -126,6 +129,7 @@ try:
     print(f"\nFeatures demonstrated:")
     print(f"  • X error bars (horizontal) for time uncertainty")
     print(f"  • Y error bars (vertical) for value thresholds")
+    print(f"  • Different marker shapes (v, ^, o, s, D, *)")
     print(f"  • Auto-positioning and stacking of multiple markers")
     print(f"  • Color customization for different marker types")
     print(f"  • Labels for legend entries")
