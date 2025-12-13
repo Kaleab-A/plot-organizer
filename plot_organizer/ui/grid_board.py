@@ -299,8 +299,17 @@ class PlotTile(QFrame):
             label = marker.get('label')
             marker_shape = marker.get('marker', 'v')  # Default to triangle down
             
-            # Auto-compute y position if not provided (stack from top)
-            if y_val is None:
+            # If y is provided, it must be an integer (0, 1, 2...) to select stacking level
+            if y_val is not None:
+                # Check if it's an integer or a whole number (0.0, 1.0, 2.0, etc.)
+                if isinstance(y_val, (int, float)) and y_val >= 0 and y_val == int(y_val):
+                    # Use integer as stacking level index (0-based)
+                    y_val = ylim[1] - (0.05 + int(y_val) * 0.08) * y_range
+                else:
+                    # Not a whole number or invalid - skip this marker
+                    continue
+            else:
+                # Auto-compute y position if not provided (stack from top)
                 y_val = ylim[1] - (0.05 + i * 0.08) * y_range
             
             ax.errorbar(
@@ -311,6 +320,7 @@ class PlotTile(QFrame):
                 color=color,
                 capsize=3.5,
                 markersize=8,
+                fillstyle='none',  # Hollow markers (no fill)
                 label=label,
                 zorder=10  # Render on top
             )
@@ -324,8 +334,17 @@ class PlotTile(QFrame):
             label = marker.get('label')
             marker_shape = marker.get('marker', 'v')  # Default to triangle down
             
-            # Auto-compute x position if not provided (stack from right)
-            if x_val is None:
+            # If x is provided, it must be an integer (0, 1, 2...) to select stacking level
+            if x_val is not None:
+                # Check if it's an integer or a whole number (0.0, 1.0, 2.0, etc.)
+                if isinstance(x_val, (int, float)) and x_val >= 0 and x_val == int(x_val):
+                    # Use integer as stacking level index (0-based)
+                    x_val = xlim[1] - (0.05 + int(x_val) * 0.08) * x_range
+                else:
+                    # Not a whole number or invalid - skip this marker
+                    continue
+            else:
+                # Auto-compute x position if not provided (stack from right)
                 x_val = xlim[1] - (0.05 + i * 0.08) * x_range
             
             ax.errorbar(
@@ -336,6 +355,7 @@ class PlotTile(QFrame):
                 color=color,
                 capsize=3.5,
                 markersize=8,
+                fillstyle='none',  # Hollow markers (no fill)
                 label=label,
                 zorder=10  # Render on top
             )

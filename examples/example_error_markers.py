@@ -53,17 +53,21 @@ try:
         title="Accuracy with Time Markers",
         error_markers=[
             # Mark a significant event at time 3.5 with uncertainty
+            # y=0 selects first stacking level (top)
             {
                 "x": 3.5,
                 "xerr": 0.5,  # ±0.5 time units
+                "y": 0,  # Integer: use first stacking level (0-based)
                 "marker": "v",  # Triangle down
                 "color": "red",
                 "label": "Checkpoint Saved"
             },
             # Mark another event at time 5.2
+            # y=1 selects second stacking level
             {
                 "x": 5.2,
                 "xerr": 0.3,
+                "y": 1,  # Integer: use second stacking level (0-based)
                 "marker": "^",  # Triangle up
                 "color": "blue",
                 "label": "Learning Rate Drop"
@@ -83,9 +87,11 @@ try:
         title="Loss with Threshold Markers",
         error_markers=[
             # Mark a performance threshold at loss=1.0 with tolerance
+            # x=0 selects first stacking level (rightmost) for vertical bars
             {
                 "y": 1.0,
                 "yerr": 0.1,  # ±0.1 loss units
+                "x": 0,  # Integer: use first stacking level (0-based)
                 "marker": "o",  # Circle
                 "color": "green",
                 "label": "Target Loss"
@@ -129,6 +135,7 @@ try:
     print(f"\nFeatures demonstrated:")
     print(f"  • X error bars (horizontal) for time uncertainty")
     print(f"  • Y error bars (vertical) for value thresholds")
+    print(f"  • Integer stacking levels (y=0,1,2... for horizontal; x=0,1,2... for vertical)")
     print(f"  • Different marker shapes (v, ^, o, s, D, *)")
     print(f"  • Auto-positioning and stacking of multiple markers")
     print(f"  • Color customization for different marker types")

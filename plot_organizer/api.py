@@ -104,7 +104,9 @@ def create_plot(
         ylim: Y-axis limits as (min, max) tuple or list
         title: Plot title
         error_markers: List of error bar marker dicts. Each dict should have:
-            - x, y: position values (at least one required, others auto-computed)
+            - x, y: position values. For horizontal bars (xerr), y can be integer 0,1,2...
+                to select stacking level. For vertical bars (yerr), x can be integer 0,1,2...
+                to select stacking level. If not provided, auto-computed.
             - xerr, yerr: error bar widths (at least one required)
             - marker: marker shape (default: 'v' for triangle down)
                 Available: 'v', '^', 'o', 's', 'D', '*', 'x', '+', '<', '>'
@@ -120,8 +122,8 @@ def create_plot(
         ...     x="time",
         ...     y="accuracy",
         ...     error_markers=[
-        ...         {"x": 5.0, "xerr": 0.5, "marker": "v", "color": "red", "label": "Event 1"},
-        ...         {"x": 10.0, "xerr": 0.3, "marker": "^", "color": "blue", "label": "Event 2"}
+        ...         {"x": 5.0, "xerr": 0.5, "y": 0, "marker": "v", "color": "red", "label": "Event 1"},
+        ...         {"x": 10.0, "xerr": 0.3, "y": 1, "marker": "^", "color": "blue", "label": "Event 2"}
         ...     ]
         ... )
     """

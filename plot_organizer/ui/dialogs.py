@@ -633,11 +633,11 @@ class ErrorMarkerDialog(QDialog):
         pos_layout = QFormLayout()
         
         self.x_input = QLineEdit(self)
-        self.x_input.setPlaceholderText("Auto-positioned")
+        self.x_input.setPlaceholderText("Auto-positioned, or integer 0,1,2... for vertical bars")
         pos_layout.addRow("X position:", self.x_input)
         
         self.y_input = QLineEdit(self)
-        self.y_input.setPlaceholderText("Auto-positioned")
+        self.y_input.setPlaceholderText("Auto-positioned, or integer 0,1,2... for horizontal bars")
         pos_layout.addRow("Y position:", self.y_input)
         
         pos_group.setLayout(pos_layout)

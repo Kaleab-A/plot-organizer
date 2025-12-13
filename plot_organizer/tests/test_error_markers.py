@@ -397,6 +397,250 @@ def test_error_markers_shape_save_load():
         Path(csv_path).unlink()
 
 
+def test_integer_stacking_levels_horizontal():
+    """Test integer stacking levels for horizontal error bars (y=1,2,3...)."""
+    try:
+        from PySide6.QtWidgets import QApplication
+        import sys
+        
+        # Create QApplication if not exists
+        app = QApplication.instance()
+        if app is None:
+            app = QApplication(sys.argv)
+        
+        from plot_organizer.ui.grid_board import PlotTile
+        
+        # Create test data
+        df = pd.DataFrame({
+            "time": [1, 2, 3, 4, 5],
+            "accuracy": [0.5, 0.6, 0.7, 0.8, 0.9]
+        })
+        
+        # Create tile with markers using integer stacking levels (test both int and float)
+        tile = PlotTile()
+        error_markers = [
+            {"x": 2.0, "xerr": 0.2, "y": 0, "color": "red", "label": "Level 0 (int)"},
+            {"x": 3.0, "xerr": 0.2, "y": 1.0, "color": "blue", "label": "Level 1 (float)"},
+            {"x": 4.0, "xerr": 0.2, "y": 2, "color": "green", "label": "Level 2 (int)"},
+        ]
+        
+        tile.set_plot(
+            df=df,
+            x="time",
+            y="accuracy",
+            error_markers=error_markers
+        )
+        
+        # Verify markers are stored
+        assert tile._error_markers == error_markers
+        assert len(tile._error_markers) == 3
+        
+        # Verify all markers have whole number y values (int or float that equals int)
+        for marker in tile._error_markers:
+            y_val = marker['y']
+            assert isinstance(y_val, (int, float))
+            assert y_val >= 0  # 0-based indexing
+            assert y_val == int(y_val)  # Must be a whole number
+        
+    except ImportError:
+        pytest.skip("PySide6 not available for rendering test")
+
+
+def test_integer_stacking_levels_vertical():
+    """Test integer stacking levels for vertical error bars (x=1,2,3...)."""
+    try:
+        from PySide6.QtWidgets import QApplication
+        import sys
+        
+        # Create QApplication if not exists
+        app = QApplication.instance()
+        if app is None:
+            app = QApplication(sys.argv)
+        
+        from plot_organizer.ui.grid_board import PlotTile
+        
+        # Create test data
+        df = pd.DataFrame({
+            "time": [1, 2, 3, 4, 5],
+            "accuracy": [0.5, 0.6, 0.7, 0.8, 0.9]
+        })
+        
+        # Create tile with markers using integer stacking levels (test both int and float)
+        tile = PlotTile()
+        error_markers = [
+            {"y": 0.7, "yerr": 0.1, "x": 0, "color": "red", "label": "Level 0 (int)"},
+            {"y": 0.8, "yerr": 0.1, "x": 1.0, "color": "blue", "label": "Level 1 (float)"},
+        ]
+        
+        tile.set_plot(
+            df=df,
+            x="time",
+            y="accuracy",
+            error_markers=error_markers
+        )
+        
+        # Verify markers are stored
+        assert tile._error_markers == error_markers
+        assert len(tile._error_markers) == 2
+        
+        # Verify all markers have whole number x values (int or float that equals int)
+        for marker in tile._error_markers:
+            x_val = marker['x']
+            assert isinstance(x_val, (int, float))
+            assert x_val >= 0  # 0-based indexing
+            assert x_val == int(x_val)  # Must be a whole number
+        
+    except ImportError:
+        pytest.skip("PySide6 not available for rendering test")
+
+
+def test_float_whole_numbers_work():
+    """Test that float whole numbers (1.0, 2.0) work for stacking levels."""
+    try:
+        from PySide6.QtWidgets import QApplication
+        import sys
+        
+        # Create QApplication if not exists
+        app = QApplication.instance()
+        if app is None:
+            app = QApplication(sys.argv)
+        
+        from plot_organizer.ui.grid_board import PlotTile
+        
+        # Create test data
+        df = pd.DataFrame({
+            "time": [1, 2, 3, 4, 5],
+            "accuracy": [0.5, 0.6, 0.7, 0.8, 0.9]
+        })
+        
+        # Create tile with markers using float whole numbers (as dialog would provide)
+        tile = PlotTile()
+        error_markers = [
+            {"x": 2.0, "xerr": 0.2, "y": 0.0, "color": "red", "label": "Level 0 (float)"},
+            {"x": 3.0, "xerr": 0.2, "y": 1.0, "color": "blue", "label": "Level 1 (float)"},
+        ]
+        
+        tile.set_plot(
+            df=df,
+            x="time",
+            y="accuracy",
+            error_markers=error_markers
+        )
+        
+        # Verify markers are stored
+        assert len(tile._error_markers) == 2
+        
+        # Verify all markers have float whole number y values
+        for marker in tile._error_markers:
+            y_val = marker['y']
+            assert isinstance(y_val, float)
+            assert y_val >= 0  # 0-based indexing
+            assert y_val == int(y_val)  # Must be a whole number
+        
+        # The rendering should work without crashing
+        # (We can't easily test rendering output, but we verify it doesn't crash)
+        
+    except ImportError:
+        pytest.skip("PySide6 not available for rendering test")
+
+
+def test_non_integer_values_skipped():
+    """Test that non-integer values are safely skipped (marker not rendered)."""
+    try:
+        from PySide6.QtWidgets import QApplication
+        import sys
+        
+        # Create QApplication if not exists
+        app = QApplication.instance()
+        if app is None:
+            app = QApplication(sys.argv)
+        
+        from plot_organizer.ui.grid_board import PlotTile
+        
+        # Create test data
+        df = pd.DataFrame({
+            "time": [1, 2, 3, 4, 5],
+            "accuracy": [0.5, 0.6, 0.7, 0.8, 0.9]
+        })
+        
+        # Create tile with markers - one with integer, one with non-integer
+        tile = PlotTile()
+        error_markers = [
+            {"x": 2.0, "xerr": 0.2, "y": 0, "color": "red", "label": "Valid"},
+            {"x": 3.0, "xerr": 0.2, "y": 2.5, "color": "blue", "label": "Invalid - skipped"},
+        ]
+        
+        tile.set_plot(
+            df=df,
+            x="time",
+            y="accuracy",
+            error_markers=error_markers
+        )
+        
+        # Markers are still stored, but non-integer one should be skipped during rendering
+        assert len(tile._error_markers) == 2
+        
+        # The rendering should skip the non-integer one without crashing
+        # (We can't easily test rendering output, but we verify it doesn't crash)
+        
+    except ImportError:
+        pytest.skip("PySide6 not available for rendering test")
+
+
+def test_integer_stacking_save_load():
+    """Test that integer stacking levels are preserved through save/load cycle."""
+    # Create a temporary CSV file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        f.write("time,accuracy\n")
+        f.write("1,0.5\n")
+        f.write("2,0.7\n")
+        f.write("3,0.9\n")
+        csv_path = f.name
+    
+    try:
+        # Create project with markers using integer stacking levels
+        ds = create_datasource("test", csv_path)
+        plot = create_plot(
+            ds["id"],
+            x="time",
+            y="accuracy",
+            error_markers=[
+                {"x": 1.5, "xerr": 0.2, "y": 0, "marker": "^", "color": "red", "label": "Level 0"},
+                {"x": 2.5, "xerr": 0.3, "y": 1, "marker": "o", "color": "blue", "label": "Level 1"},
+            ]
+        )
+        project = create_project((2, 2), [ds], [plot])
+        
+        # Save to file
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.ppo', delete=False) as f:
+            project_path = f.name
+        
+        save_project_file(project, project_path)
+        
+        # Load back
+        loaded_project = load_project_file(project_path)
+        
+        # Verify integer stacking levels are preserved
+        assert len(loaded_project["plots"]) == 1
+        loaded_plot = loaded_project["plots"][0]
+        assert "error_markers" in loaded_plot
+        assert len(loaded_plot["error_markers"]) == 2
+        
+        marker1 = loaded_plot["error_markers"][0]
+        assert marker1["y"] == 0
+        assert marker1["xerr"] == 0.2
+        
+        marker2 = loaded_plot["error_markers"][1]
+        assert marker2["y"] == 1
+        assert marker2["xerr"] == 0.3
+        
+        # Cleanup
+        Path(project_path).unlink()
+    
+    finally:
+        Path(csv_path).unlink()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
 
