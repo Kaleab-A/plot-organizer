@@ -212,6 +212,71 @@ def load_project_file(path: str) -> dict[str, Any]:
         return json.load(f)
 
 
+def _expand_limits_for_reference_lines(
+    xlim: list[float] | None,
+    ylim: list[float] | None,
+    hlines: list[float] | None,
+    vlines: list[float] | None,
+    xlim_auto: bool = True,
+    ylim_auto: bool = True,
+) -> tuple[list[float] | None, list[float] | None]:
+    """Expand axis limits to include reference lines and add padding.
+    
+    For auto-computed limits, adds 10% total padding (5% on each side).
+    Also ensures that horizontal and vertical reference lines are visible.
+    
+    Args:
+        xlim: X-axis limits
+        ylim: Y-axis limits
+        hlines: Horizontal reference line positions
+        vlines: Vertical reference line positions
+        xlim_auto: If True, xlim was auto-computed (apply padding)
+        ylim_auto: If True, ylim was auto-computed (apply padding)
+    """
+    # Add 5% margin on each side (10% total) only for auto-computed limits
+    MARGIN_FACTOR = 0.05
+    
+    # First, add padding to auto-computed base limits
+    if xlim is not None and xlim_auto:
+        xmin, xmax = xlim[0], xlim[1]
+        x_range = xmax - xmin
+        xmin = xmin - x_range * MARGIN_FACTOR
+        xmax = xmax + x_range * MARGIN_FACTOR
+        xlim = [xmin, xmax]
+    
+    if ylim is not None and ylim_auto:
+        ymin, ymax = ylim[0], ylim[1]
+        y_range = ymax - ymin
+        ymin = ymin - y_range * MARGIN_FACTOR
+        ymax = ymax + y_range * MARGIN_FACTOR
+        ylim = [ymin, ymax]
+    
+    # Then, expand to include reference lines if needed (regardless of auto)
+    if hlines and ylim is not None:
+        ymin, ymax = ylim[0], ylim[1]
+        for hval in hlines:
+            if hval < ymin:
+                margin = (ymax - ymin) * MARGIN_FACTOR
+                ymin = hval - margin
+            if hval > ymax:
+                margin = (ymax - ymin) * MARGIN_FACTOR
+                ymax = hval + margin
+        ylim = [ymin, ymax]
+    
+    if vlines and xlim is not None:
+        xmin, xmax = xlim[0], xlim[1]
+        for vval in vlines:
+            if vval < xmin:
+                margin = (xmax - xmin) * MARGIN_FACTOR
+                xmin = vval - margin
+            if vval > xmax:
+                margin = (xmax - xmin) * MARGIN_FACTOR
+                xmax = vval + margin
+        xlim = [xmin, xmax]
+    
+    return xlim, ylim
+
+
 # Convenience function for quick project creation
 def create_grouped_plots(
     datasource_id: str,
@@ -291,6 +356,9 @@ def create_grouped_plots(
     # Compute shared limits if not provided
     computed_xlim = xlim
     computed_ylim = ylim
+    xlim_auto = xlim is None  # Track if limits were auto-computed
+    ylim_auto = ylim is None
+    
     if (ylim is None or xlim is None) and len(filter_queries) > 1:
         if sem_column:
             # SEM-aware limits
@@ -312,6 +380,11 @@ def create_grouped_plots(
             computed_xlim = list(xlim_tuple) if xlim_tuple else None
         if ylim is None:
             computed_ylim = list(ylim_tuple) if ylim_tuple else None
+    
+    # Expand limits to include reference lines (padding only for auto-computed)
+    computed_xlim, computed_ylim = _expand_limits_for_reference_lines(
+        computed_xlim, computed_ylim, hlines, vlines, xlim_auto, ylim_auto
+    )
     
     # Create plots with auto-positioning
     plots = []

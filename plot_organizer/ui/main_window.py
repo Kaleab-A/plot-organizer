@@ -163,11 +163,13 @@ class MainWindow(QMainWindow):
         
         # Compute shared axes if groups present
         xlim, ylim = None, None
+        xlim_auto, ylim_auto = True, True  # Track if limits are auto-computed
         
         # Check if custom y-limits are provided
         if y_min is not None and y_max is not None:
             # Use custom y-limits for all plots
             ylim = (y_min, y_max)
+            ylim_auto = False  # Manual limit
         elif len(filter_queries) > 1:
             # Auto-compute shared limits for multiple plots
             if sem_column:
@@ -183,6 +185,9 @@ class MainWindow(QMainWindow):
                         subset = subset[subset[col] == val]
                     subsets.append(subset)
                 xlim, ylim = shared_limits(subsets, x, y, flip_axes)
+        
+        # Expand limits to include reference lines (padding only for auto-computed)
+        xlim, ylim = self._expand_limits_for_reference_lines(xlim, ylim, hlines, vlines, xlim_auto, ylim_auto)
         
         # Place plots in grid
         for fq in filter_queries:
@@ -220,6 +225,71 @@ class MainWindow(QMainWindow):
             # Connect signals for new tiles
             tile.settings_requested.connect(self._on_tile_settings, Qt.UniqueConnection)
             tile.clear_requested.connect(self._on_tile_clear, Qt.UniqueConnection)
+    
+    def _expand_limits_for_reference_lines(
+        self,
+        xlim: tuple[float, float] | None,
+        ylim: tuple[float, float] | None,
+        hlines: list[float],
+        vlines: list[float],
+        xlim_auto: bool = True,
+        ylim_auto: bool = True,
+    ) -> tuple[tuple[float, float] | None, tuple[float, float] | None]:
+        """Expand axis limits to include reference lines and add padding.
+        
+        For auto-computed limits, adds 10% total padding (5% on each side).
+        Also ensures that horizontal and vertical reference lines are visible.
+        
+        Args:
+            xlim: X-axis limits
+            ylim: Y-axis limits
+            hlines: Horizontal reference line positions
+            vlines: Vertical reference line positions
+            xlim_auto: If True, xlim was auto-computed (apply padding)
+            ylim_auto: If True, ylim was auto-computed (apply padding)
+        """
+        # Add 5% margin on each side (10% total) only for auto-computed limits
+        MARGIN_FACTOR = 0.05
+        
+        # First, add padding to auto-computed base limits
+        if xlim is not None and xlim_auto:
+            xmin, xmax = xlim
+            x_range = xmax - xmin
+            xmin = xmin - x_range * MARGIN_FACTOR
+            xmax = xmax + x_range * MARGIN_FACTOR
+            xlim = (xmin, xmax)
+        
+        if ylim is not None and ylim_auto:
+            ymin, ymax = ylim
+            y_range = ymax - ymin
+            ymin = ymin - y_range * MARGIN_FACTOR
+            ymax = ymax + y_range * MARGIN_FACTOR
+            ylim = (ymin, ymax)
+        
+        # Then, expand to include reference lines if needed (regardless of auto)
+        if hlines and ylim is not None:
+            ymin, ymax = ylim
+            for hval in hlines:
+                if hval < ymin:
+                    margin = (ymax - ymin) * MARGIN_FACTOR
+                    ymin = hval - margin
+                if hval > ymax:
+                    margin = (ymax - ymin) * MARGIN_FACTOR
+                    ymax = hval + margin
+            ylim = (ymin, ymax)
+        
+        if vlines and xlim is not None:
+            xmin, xmax = xlim
+            for vval in vlines:
+                if vval < xmin:
+                    margin = (xmax - xmin) * MARGIN_FACTOR
+                    xmin = vval - margin
+                if vval > xmax:
+                    margin = (xmax - xmin) * MARGIN_FACTOR
+                    xmax = vval + margin
+            xlim = (xmin, xmax)
+        
+        return xlim, ylim
     
     def _connect_tile_signals(self) -> None:
         """Connect signals for all existing tiles."""

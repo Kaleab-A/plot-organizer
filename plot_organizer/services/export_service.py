@@ -124,6 +124,20 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
         else:
             ax.fill_between(ind_vals, lower, upper, alpha=0.2, color=color)
     
+    def plot_error_bars(ind_vals, dep_vals, sem_vals, color, label=None):
+        """Plot error bars for each data point based on flip_axes setting."""
+        if flip_axes:
+            ax.errorbar(dep_vals, ind_vals, xerr=sem_vals,
+                       fmt='o', color=color, capsize=3, markersize=6,
+                       label=label, elinewidth=1.5)
+        else:
+            ax.errorbar(ind_vals, dep_vals, yerr=sem_vals,
+                       fmt='o', color=color, capsize=3, markersize=6,
+                       label=label, elinewidth=1.5)
+    
+    # Determine if error bars should be used (markers only, no line)
+    use_error_bars = style_marker and not style_line
+    
     # Helper function to plot with SEM (same logic as PlotTile._plot_with_sem)
     def plot_with_sem(data, label=None):
         if sem_column and sem_column in data.columns:
@@ -134,16 +148,26 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
                     sem_column: 'mean'
                 })
                 
-                line = plot_line(agg_data[ind_col], agg_data[dep_col], fmt, label)
-                
-                if agg_data[sem_column].notna().any():
-                    color = line.get_color()
-                    fill_sem(
-                        agg_data[ind_col],
-                        agg_data[dep_col] - agg_data[sem_column],
-                        agg_data[dep_col] + agg_data[sem_column],
-                        color
-                    )
+                if use_error_bars:
+                    # Use error bars for each point
+                    color = plt.rcParams['axes.prop_cycle'].by_key()['color'][0]
+                    if label:
+                        ax_colors = [line.get_color() for line in ax.lines]
+                        color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+                        color = color_cycle[len(ax_colors) % len(color_cycle)]
+                    plot_error_bars(agg_data[ind_col].values, agg_data[dep_col].values,
+                                   agg_data[sem_column].fillna(0).values, color, label)
+                else:
+                    line = plot_line(agg_data[ind_col], agg_data[dep_col], fmt, label)
+                    
+                    if agg_data[sem_column].notna().any():
+                        color = line.get_color()
+                        fill_sem(
+                            agg_data[ind_col],
+                            agg_data[dep_col] - agg_data[sem_column],
+                            agg_data[dep_col] + agg_data[sem_column],
+                            color
+                        )
             else:
                 # Computed SEM: group by sem_column first, then by independent column
                 grouped = data.groupby([sem_column, ind_col], as_index=False)[dep_col].mean()
@@ -151,16 +175,26 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
                 stats = grouped.groupby(ind_col)[dep_col].agg(['mean', 'sem']).reset_index()
                 stats.columns = [ind_col, 'mean_dep', 'sem_dep']
                 
-                line = plot_line(stats[ind_col], stats['mean_dep'], fmt, label)
-                
-                if stats['sem_dep'].notna().any():
-                    color = line.get_color()
-                    fill_sem(
-                        stats[ind_col],
-                        stats['mean_dep'] - stats['sem_dep'],
-                        stats['mean_dep'] + stats['sem_dep'],
-                        color
-                    )
+                if use_error_bars:
+                    # Use error bars for each point
+                    color = plt.rcParams['axes.prop_cycle'].by_key()['color'][0]
+                    if label:
+                        ax_colors = [line.get_color() for line in ax.lines]
+                        color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+                        color = color_cycle[len(ax_colors) % len(color_cycle)]
+                    plot_error_bars(stats[ind_col].values, stats['mean_dep'].values,
+                                   stats['sem_dep'].fillna(0).values, color, label)
+                else:
+                    line = plot_line(stats[ind_col], stats['mean_dep'], fmt, label)
+                    
+                    if stats['sem_dep'].notna().any():
+                        color = line.get_color()
+                        fill_sem(
+                            stats[ind_col],
+                            stats['mean_dep'] - stats['sem_dep'],
+                            stats['mean_dep'] + stats['sem_dep'],
+                            color
+                        )
         else:
             agg_data = data.groupby(ind_col, as_index=False)[dep_col].mean()
             plot_line(agg_data[ind_col], agg_data[dep_col], fmt, label)

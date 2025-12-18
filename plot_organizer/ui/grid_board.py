@@ -221,17 +221,30 @@ class PlotTile(QFrame):
                 stats = grouped.groupby(ind_col)[dep_col].agg(['mean', 'sem']).reset_index()
                 stats.columns = [ind_col, 'mean_dep', 'sem_dep']
                 
-                # Plot mean line with style
-                fmt = self._get_plot_format()
-                line = self._plot_line(ax, stats[ind_col], stats['mean_dep'], fmt, label)
-                
-                # Plot SEM as shaded region
-                if stats['sem_dep'].notna().any():
-                    color = line.get_color()
-                    self._fill_sem(ax, stats[ind_col], 
-                                   stats['mean_dep'] - stats['sem_dep'],
-                                   stats['mean_dep'] + stats['sem_dep'],
-                                   color)
+                # Choose between error bars (markers only) or shaded region (with line)
+                if self._should_use_error_bars():
+                    # Use error bars for each point
+                    import matplotlib.pyplot as plt
+                    color = plt.rcParams['axes.prop_cycle'].by_key()['color'][0]
+                    if label:
+                        # Get next color from cycle for different hue groups
+                        ax_colors = [line.get_color() for line in ax.lines]
+                        color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+                        color = color_cycle[len(ax_colors) % len(color_cycle)]
+                    self._plot_error_bars(ax, stats[ind_col].values, stats['mean_dep'].values,
+                                         stats['sem_dep'].fillna(0).values, color, label)
+                else:
+                    # Plot mean line with style
+                    fmt = self._get_plot_format()
+                    line = self._plot_line(ax, stats[ind_col], stats['mean_dep'], fmt, label)
+                    
+                    # Plot SEM as shaded region
+                    if stats['sem_dep'].notna().any():
+                        color = line.get_color()
+                        self._fill_sem(ax, stats[ind_col], 
+                                       stats['mean_dep'] - stats['sem_dep'],
+                                       stats['mean_dep'] + stats['sem_dep'],
+                                       color)
         else:
             # No SEM: just aggregate by independent axis and plot mean
             agg_df = df.groupby(ind_col, as_index=False)[dep_col].mean()
@@ -258,6 +271,33 @@ class PlotTile(QFrame):
         else:
             # Vertical bands: Y varies, X is fixed
             ax.fill_between(ind_vals, lower, upper, alpha=0.2, color=color)
+    
+    def _should_use_error_bars(self) -> bool:
+        """Determine if error bars should be used instead of shaded region.
+        
+        Returns True when markers only (no line) is selected.
+        """
+        return self._style_marker and not self._style_line
+    
+    def _plot_error_bars(self, ax, ind_vals, dep_vals, sem_vals, color, label: Optional[str] = None) -> None:
+        """Plot error bars for each data point based on flip_axes setting.
+        
+        Used when markers only (no line) is selected.
+        """
+        if self._flip_axes:
+            # X is dependent (with error), Y is independent
+            ax.errorbar(
+                dep_vals, ind_vals, xerr=sem_vals,
+                fmt='o', color=color, capsize=3, markersize=6,
+                label=label, elinewidth=1.5
+            )
+        else:
+            # Y is dependent (with error), X is independent
+            ax.errorbar(
+                ind_vals, dep_vals, yerr=sem_vals,
+                fmt='o', color=color, capsize=3, markersize=6,
+                label=label, elinewidth=1.5
+            )
     
     def _plot_with_precomputed_sem(self, ax, df: pd.DataFrame, x: str, y: str, sem_column: str, label: Optional[str] = None) -> None:
         """Plot data with pre-computed SEM values from a column.
@@ -298,17 +338,30 @@ class PlotTile(QFrame):
                 f"Consider pre-aggregating your data."
             )
         
-        # Plot mean line with style
-        fmt = self._get_plot_format()
-        line = self._plot_line(ax, agg_df[ind_col], agg_df[dep_col], fmt, label)
-        
-        # Plot SEM as shaded region
-        if agg_df[sem_column].notna().any():
-            color = line.get_color()
-            self._fill_sem(ax, agg_df[ind_col],
-                          agg_df[dep_col] - agg_df[sem_column],
-                          agg_df[dep_col] + agg_df[sem_column],
-                          color)
+        # Choose between error bars (markers only) or shaded region (with line)
+        if self._should_use_error_bars():
+            # Use error bars for each point
+            import matplotlib.pyplot as plt
+            color = plt.rcParams['axes.prop_cycle'].by_key()['color'][0]
+            if label:
+                # Get next color from cycle for different hue groups
+                ax_colors = [line.get_color() for line in ax.lines]
+                color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+                color = color_cycle[len(ax_colors) % len(color_cycle)]
+            self._plot_error_bars(ax, agg_df[ind_col].values, agg_df[dep_col].values,
+                                 agg_df[sem_column].fillna(0).values, color, label)
+        else:
+            # Plot mean line with style
+            fmt = self._get_plot_format()
+            line = self._plot_line(ax, agg_df[ind_col], agg_df[dep_col], fmt, label)
+            
+            # Plot SEM as shaded region
+            if agg_df[sem_column].notna().any():
+                color = line.get_color()
+                self._fill_sem(ax, agg_df[ind_col],
+                              agg_df[dep_col] - agg_df[sem_column],
+                              agg_df[dep_col] + agg_df[sem_column],
+                              color)
     
     def _render_error_markers(self, ax, plot_df: pd.DataFrame) -> None:
         """Render error bar markers on the plot.
