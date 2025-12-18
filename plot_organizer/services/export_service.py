@@ -87,6 +87,13 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
     filter_query = tile._filter_query
     style_line = tile._style_line
     style_marker = tile._style_marker
+    flip_axes = getattr(tile, "_flip_axes", False)
+    
+    # Determine independent and dependent axes based on flip_axes
+    if flip_axes:
+        ind_col, dep_col = y, x  # Y is independent, X is dependent
+    else:
+        ind_col, dep_col = x, y  # X is independent, Y is dependent
     
     # Get format string for plotting
     if style_line and style_marker:
@@ -102,48 +109,61 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
         for col, val in filter_query.items():
             plot_df = plot_df[plot_df[col] == val]
     
+    # Helper functions for plotting with flip_axes support
+    def plot_line(ind_data, dep_data, fmt_str, label=None):
+        """Plot line with coordinates based on flip_axes setting."""
+        if flip_axes:
+            return ax.plot(dep_data, ind_data, fmt_str, label=label)[0]
+        else:
+            return ax.plot(ind_data, dep_data, fmt_str, label=label)[0]
+    
+    def fill_sem(ind_vals, lower, upper, color):
+        """Fill SEM region based on flip_axes setting."""
+        if flip_axes:
+            ax.fill_betweenx(ind_vals, lower, upper, alpha=0.2, color=color)
+        else:
+            ax.fill_between(ind_vals, lower, upper, alpha=0.2, color=color)
+    
     # Helper function to plot with SEM (same logic as PlotTile._plot_with_sem)
     def plot_with_sem(data, label=None):
         if sem_column and sem_column in data.columns:
             if sem_precomputed:
-                # Pre-computed SEM: aggregate by x
-                agg_data = data.groupby(x, as_index=False).agg({
-                    y: 'mean',
+                # Pre-computed SEM: aggregate by independent column
+                agg_data = data.groupby(ind_col, as_index=False).agg({
+                    dep_col: 'mean',
                     sem_column: 'mean'
                 })
                 
-                line = ax.plot(agg_data[x], agg_data[y], fmt, label=label)[0]
+                line = plot_line(agg_data[ind_col], agg_data[dep_col], fmt, label)
                 
                 if agg_data[sem_column].notna().any():
                     color = line.get_color()
-                    ax.fill_between(
-                        agg_data[x],
-                        agg_data[y] - agg_data[sem_column],
-                        agg_data[y] + agg_data[sem_column],
-                        alpha=0.2,
-                        color=color
+                    fill_sem(
+                        agg_data[ind_col],
+                        agg_data[dep_col] - agg_data[sem_column],
+                        agg_data[dep_col] + agg_data[sem_column],
+                        color
                     )
             else:
-                # Computed SEM: group by sem_column first, then by x
-                grouped = data.groupby([sem_column, x], as_index=False)[y].mean()
+                # Computed SEM: group by sem_column first, then by independent column
+                grouped = data.groupby([sem_column, ind_col], as_index=False)[dep_col].mean()
                 # Compute mean and SEM across sem_column groups
-                stats = grouped.groupby(x)[y].agg(['mean', 'sem']).reset_index()
-                stats.columns = [x, 'mean_y', 'sem_y']
+                stats = grouped.groupby(ind_col)[dep_col].agg(['mean', 'sem']).reset_index()
+                stats.columns = [ind_col, 'mean_dep', 'sem_dep']
                 
-                line = ax.plot(stats[x], stats['mean_y'], fmt, label=label)[0]
+                line = plot_line(stats[ind_col], stats['mean_dep'], fmt, label)
                 
-                if stats['sem_y'].notna().any():
+                if stats['sem_dep'].notna().any():
                     color = line.get_color()
-                    ax.fill_between(
-                        stats[x],
-                        stats['mean_y'] - stats['sem_y'],
-                        stats['mean_y'] + stats['sem_y'],
-                        alpha=0.2,
-                        color=color
+                    fill_sem(
+                        stats[ind_col],
+                        stats['mean_dep'] - stats['sem_dep'],
+                        stats['mean_dep'] + stats['sem_dep'],
+                        color
                     )
         else:
-            agg_data = data.groupby(x, as_index=False)[y].mean()
-            ax.plot(agg_data[x], agg_data[y], fmt, label=label)
+            agg_data = data.groupby(ind_col, as_index=False)[dep_col].mean()
+            plot_line(agg_data[ind_col], agg_data[dep_col], fmt, label)
     
     # Apply aggregation with SEM
     if hue:
@@ -163,13 +183,22 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
     ax.set_ylabel(y, fontsize='small')
     ax.tick_params(labelsize='small')
 
-    # Add minor x-ticks for a finer grid without extra labels (match UI)
-    ax.xaxis.set_minor_locator(AutoMinorLocator(5))  # 5 minor ticks between majors
-    ax.tick_params(axis='x', which='minor', length=3, labelbottom=False)
+    # Add minor ticks for a finer grid without extra labels (match UI)
+    if flip_axes:
+        # When flipped, Y is independent - add minor y-ticks
+        ax.yaxis.set_minor_locator(AutoMinorLocator(5))
+        ax.tick_params(axis='y', which='minor', length=3, labelleft=False)
+    else:
+        # Standard: X is independent - add minor x-ticks
+        ax.xaxis.set_minor_locator(AutoMinorLocator(5))
+        ax.tick_params(axis='x', which='minor', length=3, labelbottom=False)
     
-    # Apply stored y-limits if present
+    # Apply stored limits if present
     if tile._ylim is not None:
         ax.set_ylim(tile._ylim)
+    xlim = getattr(tile, "_xlim", None)
+    if xlim is not None:
+        ax.set_xlim(xlim)
     
     # Draw reference lines
     for yval in tile._hlines:
@@ -191,6 +220,8 @@ def _render_error_markers_to_ax(tile: "PlotTile", ax) -> None:
     error_markers = getattr(tile, "_error_markers", None)
     if not error_markers:
         return
+    
+    flip_axes = getattr(tile, "_flip_axes", False)
 
     # Get current axis limits for auto-positioning
     xlim = ax.get_xlim()
@@ -199,8 +230,8 @@ def _render_error_markers_to_ax(tile: "PlotTile", ax) -> None:
     y_range = ylim[1] - ylim[0]
 
     # Track markers for stacking
-    x_markers: list[dict] = []  # Markers with xerr (stacked vertically)
-    y_markers: list[dict] = []  # Markers with yerr (stacked horizontally)
+    x_markers: list[dict] = []  # Markers with xerr (horizontal error bars)
+    y_markers: list[dict] = []  # Markers with yerr (vertical error bars)
 
     for marker in error_markers:
         if marker.get("xerr") is not None:
@@ -217,18 +248,24 @@ def _render_error_markers_to_ax(tile: "PlotTile", ax) -> None:
         label = marker.get("label")
         marker_shape = marker.get("marker", "v")  # Default to triangle down
 
-        # If y is provided, it must be an integer (0, 1, 2...) to select stacking level
-        if y_val is not None:
-            # Check if it's an integer or a whole number (0.0, 1.0, 2.0, etc.)
-            if isinstance(y_val, (int, float)) and y_val >= 0 and y_val == int(y_val):
-                # Use integer as stacking level index (0-based)
-                y_val = ylim[1] - (0.05 + int(y_val) * 0.08) * y_range
+        if flip_axes:
+            # xerr is error on X (dependent axis), stack horizontally from right
+            if x_val is not None:
+                if isinstance(x_val, (int, float)) and x_val >= 0 and x_val == int(x_val):
+                    x_val = xlim[1] - (0.05 + int(x_val) * 0.08) * x_range
+                else:
+                    continue
             else:
-                # Not a whole number or invalid - skip this marker
-                continue
+                x_val = xlim[1] - (0.05 + i * 0.08) * x_range
         else:
-            # Auto-compute y position if not provided (stack from top)
-            y_val = ylim[1] - (0.05 + i * 0.08) * y_range
+            # Standard: xerr stacks vertically from top
+            if y_val is not None:
+                if isinstance(y_val, (int, float)) and y_val >= 0 and y_val == int(y_val):
+                    y_val = ylim[1] - (0.05 + int(y_val) * 0.08) * y_range
+                else:
+                    continue
+            else:
+                y_val = ylim[1] - (0.05 + i * 0.08) * y_range
 
         ax.errorbar(
             x=x_val,
@@ -252,18 +289,24 @@ def _render_error_markers_to_ax(tile: "PlotTile", ax) -> None:
         label = marker.get("label")
         marker_shape = marker.get("marker", "v")  # Default to triangle down
 
-        # If x is provided, it must be an integer (0, 1, 2...) to select stacking level
-        if x_val is not None:
-            # Check if it's an integer or a whole number (0.0, 1.0, 2.0, etc.)
-            if isinstance(x_val, (int, float)) and x_val >= 0 and x_val == int(x_val):
-                # Use integer as stacking level index (0-based)
-                x_val = xlim[1] - (0.05 + int(x_val) * 0.08) * x_range
+        if flip_axes:
+            # yerr stacks vertically from top (along Y, the independent axis)
+            if y_val is not None:
+                if isinstance(y_val, (int, float)) and y_val >= 0 and y_val == int(y_val):
+                    y_val = ylim[1] - (0.05 + int(y_val) * 0.08) * y_range
+                else:
+                    continue
             else:
-                # Not a whole number or invalid - skip this marker
-                continue
+                y_val = ylim[1] - (0.05 + i * 0.08) * y_range
         else:
-            # Auto-compute x position if not provided (stack from right)
-            x_val = xlim[1] - (0.05 + i * 0.08) * x_range
+            # Standard: yerr stacks horizontally from right
+            if x_val is not None:
+                if isinstance(x_val, (int, float)) and x_val >= 0 and x_val == int(x_val):
+                    x_val = xlim[1] - (0.05 + int(x_val) * 0.08) * x_range
+                else:
+                    continue
+            else:
+                x_val = xlim[1] - (0.05 + i * 0.08) * x_range
 
         ax.errorbar(
             x=x_val,

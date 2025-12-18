@@ -152,6 +152,7 @@ class MainWindow(QMainWindow):
         style_marker = sel.get("style_marker", False)
         y_min = sel.get("y_min")
         y_max = sel.get("y_max")
+        flip_axes = sel.get("flip_axes", False)
         
         # Expand groups to create multiple plots
         try:
@@ -172,7 +173,7 @@ class MainWindow(QMainWindow):
             if sem_column:
                 # Use SEM-aware limits calculation
                 from plot_organizer.services.plot_service import shared_limits_with_sem
-                xlim, ylim = shared_limits_with_sem(df, filter_queries, x, y, sem_column, hue, sem_precomputed)
+                xlim, ylim = shared_limits_with_sem(df, filter_queries, x, y, sem_column, hue, sem_precomputed, flip_axes)
             else:
                 # Use original limits calculation
                 subsets = []
@@ -181,7 +182,7 @@ class MainWindow(QMainWindow):
                     for col, val in fq.items():
                         subset = subset[subset[col] == val]
                     subsets.append(subset)
-                xlim, ylim = shared_limits(subsets, x, y)
+                xlim, ylim = shared_limits(subsets, x, y, flip_axes)
         
         # Place plots in grid
         for fq in filter_queries:
@@ -214,6 +215,7 @@ class MainWindow(QMainWindow):
                 vlines=vlines,
                 style_line=style_line,
                 style_marker=style_marker,
+                flip_axes=flip_axes,
             )
             # Connect signals for new tiles
             tile.settings_requested.connect(self._on_tile_settings, Qt.UniqueConnection)

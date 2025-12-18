@@ -77,8 +77,10 @@ def create_plot(
     style_line: bool = True,
     style_marker: bool = False,
     ylim: tuple[float, float] | list[float] | None = None,
+    xlim: tuple[float, float] | list[float] | None = None,
     title: str | None = None,
     error_markers: list[dict[str, Any]] | None = None,
+    flip_axes: bool = False,
 ) -> dict[str, Any]:
     """Create a plot descriptor.
     
@@ -102,6 +104,7 @@ def create_plot(
         style_line: Show lines (default: True)
         style_marker: Show markers (default: False)
         ylim: Y-axis limits as (min, max) tuple or list
+        xlim: X-axis limits as (min, max) tuple or list
         title: Plot title
         error_markers: List of error bar marker dicts. Each dict should have:
             - x, y: position values. For horizontal bars (xerr), y can be integer 0,1,2...
@@ -112,6 +115,9 @@ def create_plot(
                 Available: 'v', '^', 'o', 's', 'D', '*', 'x', '+', '<', '>'
             - color: marker color (required)
             - label: optional label for legend
+        flip_axes: If True, Y is the independent variable (control) and X is the
+            dependent variable (measure). Lines connect vertically, SEM bands are
+            horizontal. (default: False)
     
     Returns:
         Plot dict with all parameters and grid position
@@ -147,8 +153,10 @@ def create_plot(
         "style_line": style_line,
         "style_marker": style_marker,
         "ylim": list(ylim) if ylim else None,
+        "xlim": list(xlim) if xlim else None,
         "title": title,
         "error_markers": error_markers or [],
+        "flip_axes": flip_axes,
     }
     return plot_data
 
@@ -223,13 +231,15 @@ def create_grouped_plots(
     style_line: bool = True,
     style_marker: bool = False,
     ylim: tuple[float, float] | list[float] | None = None,
+    xlim: tuple[float, float] | list[float] | None = None,
     error_markers: list[dict[str, Any]] | None = None,
+    flip_axes: bool = False,
 ) -> list[dict[str, Any]]:
-    """Create multiple plots from group columns with shared y-axis limits.
+    """Create multiple plots from group columns with shared axis limits.
     
     This replicates the GUI's "groups" feature, where plots are created for
     each unique combination of group column values and automatically share
-    y-axis limits.
+    axis limits.
     
     Args:
         datasource_id: ID of the datasource
@@ -248,10 +258,12 @@ def create_grouped_plots(
         style_line: Show lines
         style_marker: Show markers
         ylim: Manual y-limits (if None, auto-computed and shared)
+        xlim: Manual x-limits (if None, auto-computed and shared)
         error_markers: List of error bar markers to add to each plot
+        flip_axes: If True, Y is independent, X is dependent. (default: False)
     
     Returns:
-        List of plot dicts with auto-computed positions and shared ylim
+        List of plot dicts with auto-computed positions and shared limits
     
     Example:
         >>> plots = create_grouped_plots(
@@ -266,7 +278,7 @@ def create_grouped_plots(
         ...     layout="row"
         ... )
         >>> # Creates one plot per (species, treatment) combination
-        >>> # All plots share the same auto-computed y-axis limits
+        >>> # All plots share the same auto-computed axis limits
     """
     from plot_organizer.services.plot_service import expand_groups, shared_limits, shared_limits_with_sem
     
@@ -277,11 +289,13 @@ def create_grouped_plots(
     filter_queries = expand_groups(df, groups)
     
     # Compute shared limits if not provided
-    if ylim is None and len(filter_queries) > 1:
+    computed_xlim = xlim
+    computed_ylim = ylim
+    if (ylim is None or xlim is None) and len(filter_queries) > 1:
         if sem_column:
             # SEM-aware limits
-            xlim, ylim_tuple = shared_limits_with_sem(
-                df, filter_queries, x, y, sem_column, hue, sem_precomputed
+            xlim_tuple, ylim_tuple = shared_limits_with_sem(
+                df, filter_queries, x, y, sem_column, hue, sem_precomputed, flip_axes
             )
         else:
             # Standard limits
@@ -291,10 +305,13 @@ def create_grouped_plots(
                 for col, val in fq.items():
                     subset = subset[subset[col] == val]
                 subsets.append(subset)
-            xlim, ylim_tuple = shared_limits(subsets, x, y)
+            xlim_tuple, ylim_tuple = shared_limits(subsets, x, y, flip_axes)
         
-        # Convert tuple to list for JSON
-        ylim = list(ylim_tuple) if ylim_tuple else None
+        # Convert tuples to lists for JSON, only if not provided
+        if xlim is None:
+            computed_xlim = list(xlim_tuple) if xlim_tuple else None
+        if ylim is None:
+            computed_ylim = list(ylim_tuple) if ylim_tuple else None
     
     # Create plots with auto-positioning
     plots = []
@@ -329,9 +346,11 @@ def create_grouped_plots(
             vlines=vlines,
             style_line=style_line,
             style_marker=style_marker,
-            ylim=ylim,
+            ylim=computed_ylim,
+            xlim=computed_xlim,
             title=title,
             error_markers=error_markers,
+            flip_axes=flip_axes,
         )
         plots.append(plot)
     

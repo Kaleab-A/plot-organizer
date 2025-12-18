@@ -40,7 +40,9 @@ class PlotTile(QFrame):
         self._style_line: bool = True
         self._style_marker: bool = False
         self._ylim: Optional[tuple[float, float]] = None
+        self._xlim: Optional[tuple[float, float]] = None
         self._error_markers: list[dict] = []
+        self._flip_axes: bool = False  # When True, Y is independent, X is dependent
         self.setContextMenuPolicy(Qt.DefaultContextMenu)
 
         layout = QVBoxLayout(self)
@@ -89,6 +91,7 @@ class PlotTile(QFrame):
         style_line: bool = True,
         style_marker: bool = False,
         error_markers: Optional[list[dict]] = None,
+        flip_axes: bool = False,
     ) -> None:
         self._df, self._x, self._y, self._hue = df, x, y, hue
         self._sem_column = sem_column
@@ -99,7 +102,9 @@ class PlotTile(QFrame):
         self._style_line = style_line
         self._style_marker = style_marker
         self._ylim = ylim  # Store y-limits for export
+        self._xlim = xlim  # Store x-limits for export
         self._error_markers = error_markers or []
+        self._flip_axes = flip_axes  # When True, Y is independent, X is dependent
         
         # Apply filter if provided
         plot_df = df.copy()  # Make a copy to avoid modifying original
@@ -138,7 +143,7 @@ class PlotTile(QFrame):
                 self._plot_with_sem(ax, sub, x, y, sem_column, label=str(key))
             ax.legend(loc="best", fontsize='small')
         else:
-            # No hue: aggregate duplicate x values
+            # No hue: aggregate duplicate values along independent axis
             self._plot_with_sem(ax, plot_df, x, y, sem_column)
         
         if title:
@@ -147,9 +152,15 @@ class PlotTile(QFrame):
         ax.set_ylabel(y, fontsize='small')
         ax.tick_params(labelsize='small')
 
-        # Add minor x-ticks for a finer grid without extra labels
-        ax.xaxis.set_minor_locator(AutoMinorLocator(5))  # 5 minor ticks between majors
-        ax.tick_params(axis='x', which='minor', length=3, labelbottom=False)
+        # Add minor ticks for a finer grid without extra labels
+        if self._flip_axes:
+            # When flipped, Y is independent - add minor y-ticks
+            ax.yaxis.set_minor_locator(AutoMinorLocator(5))
+            ax.tick_params(axis='y', which='minor', length=3, labelleft=False)
+        else:
+            # Standard: X is independent - add minor x-ticks
+            ax.xaxis.set_minor_locator(AutoMinorLocator(5))
+            ax.tick_params(axis='x', which='minor', length=3, labelbottom=False)
         
         if xlim:
             ax.set_xlim(xlim)
@@ -183,91 +194,133 @@ class PlotTile(QFrame):
         If sem_column is provided:
         - If pre-computed mode: Use SEM values directly from the column
         - If computed mode: Group by sem_column, compute mean and SEM
+        
+        When flip_axes is True:
+        - Y is the independent variable (what we group by)
+        - X is the dependent variable (what we compute mean/SEM of)
+        - SEM bands are horizontal (using fill_betweenx)
         """
         import numpy as np
+        
+        # Determine independent and dependent axes based on flip_axes
+        if self._flip_axes:
+            ind_col, dep_col = y, x  # Y is independent, X is dependent
+        else:
+            ind_col, dep_col = x, y  # X is independent, Y is dependent
         
         if sem_column and sem_column in df.columns:
             if self._sem_precomputed:
                 # Pre-computed SEM mode: use values from column
                 self._plot_with_precomputed_sem(ax, df, x, y, sem_column, label)
             else:
-                # Computed SEM mode: existing logic
-                # Step 1: Group by sem_column, then by x, compute mean of y
-                grouped = df.groupby([sem_column, x], as_index=False)[y].mean()
+                # Computed SEM mode
+                # Step 1: Group by sem_column, then by independent axis, compute mean of dependent
+                grouped = df.groupby([sem_column, ind_col], as_index=False)[dep_col].mean()
                 
-                # Step 2: For each x, compute mean and SEM across sem_column groups
-                stats = grouped.groupby(x)[y].agg(['mean', 'sem']).reset_index()
-                stats.columns = [x, 'mean_y', 'sem_y']
+                # Step 2: For each ind_col value, compute mean and SEM across sem_column groups
+                stats = grouped.groupby(ind_col)[dep_col].agg(['mean', 'sem']).reset_index()
+                stats.columns = [ind_col, 'mean_dep', 'sem_dep']
                 
                 # Plot mean line with style
                 fmt = self._get_plot_format()
-                line = ax.plot(stats[x], stats['mean_y'], fmt, label=label)[0]
+                line = self._plot_line(ax, stats[ind_col], stats['mean_dep'], fmt, label)
                 
                 # Plot SEM as shaded region
-                if stats['sem_y'].notna().any():
+                if stats['sem_dep'].notna().any():
                     color = line.get_color()
-                    ax.fill_between(
-                        stats[x],
-                        stats['mean_y'] - stats['sem_y'],
-                        stats['mean_y'] + stats['sem_y'],
-                        alpha=0.2,
-                        color=color
-                    )
+                    self._fill_sem(ax, stats[ind_col], 
+                                   stats['mean_dep'] - stats['sem_dep'],
+                                   stats['mean_dep'] + stats['sem_dep'],
+                                   color)
         else:
-            # No SEM: just aggregate by x and plot mean
-            agg_df = df.groupby(x, as_index=False)[y].mean()
+            # No SEM: just aggregate by independent axis and plot mean
+            agg_df = df.groupby(ind_col, as_index=False)[dep_col].mean()
             fmt = self._get_plot_format()
-            ax.plot(agg_df[x], agg_df[y], fmt, label=label)
+            self._plot_line(ax, agg_df[ind_col], agg_df[dep_col], fmt, label)
+    
+    def _plot_line(self, ax, ind_data, dep_data, fmt: str, label: Optional[str] = None):
+        """Plot line with coordinates based on flip_axes setting.
+        
+        Returns the Line2D object for color extraction.
+        """
+        if self._flip_axes:
+            # X is dependent, Y is independent
+            return ax.plot(dep_data, ind_data, fmt, label=label)[0]
+        else:
+            # X is independent, Y is dependent (standard)
+            return ax.plot(ind_data, dep_data, fmt, label=label)[0]
+    
+    def _fill_sem(self, ax, ind_vals, lower, upper, color) -> None:
+        """Fill SEM region based on flip_axes setting."""
+        if self._flip_axes:
+            # Horizontal bands: X varies, Y is fixed
+            ax.fill_betweenx(ind_vals, lower, upper, alpha=0.2, color=color)
+        else:
+            # Vertical bands: Y varies, X is fixed
+            ax.fill_between(ind_vals, lower, upper, alpha=0.2, color=color)
     
     def _plot_with_precomputed_sem(self, ax, df: pd.DataFrame, x: str, y: str, sem_column: str, label: Optional[str] = None) -> None:
         """Plot data with pre-computed SEM values from a column.
         
-        If multiple rows exist for same x-value:
-        - Average y-values
+        If multiple rows exist for same independent axis value:
+        - Average dependent values
         - Average SEM values
         - Show warning to user
+        
+        When flip_axes is True:
+        - Y is the independent variable
+        - X is the dependent variable with SEM
         """
         import numpy as np
         import logging
         
+        # Determine independent and dependent axes based on flip_axes
+        if self._flip_axes:
+            ind_col, dep_col = y, x  # Y is independent, X is dependent
+        else:
+            ind_col, dep_col = x, y  # X is independent, Y is dependent
+        
         # Check for duplicates
-        dup_check = df.groupby(x).size()
+        dup_check = df.groupby(ind_col).size()
         has_duplicates = (dup_check > 1).any()
         
-        # Aggregate by x: mean of y and mean of sem
-        agg_df = df.groupby(x, as_index=False).agg({
-            y: 'mean',
+        # Aggregate by independent column: mean of dependent and mean of sem
+        agg_df = df.groupby(ind_col, as_index=False).agg({
+            dep_col: 'mean',
             sem_column: 'mean'
         })
         
         # Warning if duplicates were averaged
         if has_duplicates:
             logging.warning(
-                f"Multiple rows found for some x-values. "
-                f"Averaged y-values and SEM values for plotting. "
+                f"Multiple rows found for some {ind_col}-values. "
+                f"Averaged {dep_col}-values and SEM values for plotting. "
                 f"Consider pre-aggregating your data."
             )
         
         # Plot mean line with style
         fmt = self._get_plot_format()
-        line = ax.plot(agg_df[x], agg_df[y], fmt, label=label)[0]
+        line = self._plot_line(ax, agg_df[ind_col], agg_df[dep_col], fmt, label)
         
         # Plot SEM as shaded region
         if agg_df[sem_column].notna().any():
             color = line.get_color()
-            ax.fill_between(
-                agg_df[x],
-                agg_df[y] - agg_df[sem_column],
-                agg_df[y] + agg_df[sem_column],
-                alpha=0.2,
-                color=color
-            )
+            self._fill_sem(ax, agg_df[ind_col],
+                          agg_df[dep_col] - agg_df[sem_column],
+                          agg_df[dep_col] + agg_df[sem_column],
+                          color)
     
     def _render_error_markers(self, ax, plot_df: pd.DataFrame) -> None:
         """Render error bar markers on the plot.
         
         Auto-computes missing x or y positions and stacks multiple markers.
         Each marker dict can have: x, y, xerr, yerr, color, label
+        
+        When flip_axes is True:
+        - xerr markers (horizontal error bars) represent error on the dependent axis (X)
+          and stack along the independent axis (Y) - stacking is from the right of X
+        - yerr markers (vertical error bars) represent error on the independent axis (Y)
+          and stack along the dependent axis (X) - stacking is from the top of Y
         """
         if not self._error_markers:
             return
@@ -281,8 +334,8 @@ class PlotTile(QFrame):
         y_range = ylim[1] - ylim[0]
         
         # Track markers for stacking
-        x_markers = []  # Markers with xerr (positioned along y-axis)
-        y_markers = []  # Markers with yerr (positioned along x-axis)
+        x_markers = []  # Markers with xerr (horizontal error bars)
+        y_markers = []  # Markers with yerr (vertical error bars)
         
         for marker in self._error_markers:
             if marker.get('xerr') is not None:
@@ -291,6 +344,8 @@ class PlotTile(QFrame):
                 y_markers.append(marker)
         
         # Render x-error markers (horizontal error bars)
+        # When flip_axes=False: xerr is error on independent axis (unusual), stack from top (Y)
+        # When flip_axes=True: xerr is error on dependent axis (X), stack from right (X)
         for i, marker in enumerate(x_markers):
             x_val = marker.get('x')
             y_val = marker.get('y')
@@ -299,18 +354,24 @@ class PlotTile(QFrame):
             label = marker.get('label')
             marker_shape = marker.get('marker', 'v')  # Default to triangle down
             
-            # If y is provided, it must be an integer (0, 1, 2...) to select stacking level
-            if y_val is not None:
-                # Check if it's an integer or a whole number (0.0, 1.0, 2.0, etc.)
-                if isinstance(y_val, (int, float)) and y_val >= 0 and y_val == int(y_val):
-                    # Use integer as stacking level index (0-based)
-                    y_val = ylim[1] - (0.05 + int(y_val) * 0.08) * y_range
+            if self._flip_axes:
+                # xerr is error on X (dependent axis), stack horizontally from right
+                if x_val is not None:
+                    if isinstance(x_val, (int, float)) and x_val >= 0 and x_val == int(x_val):
+                        x_val = xlim[1] - (0.05 + int(x_val) * 0.08) * x_range
+                    else:
+                        continue
                 else:
-                    # Not a whole number or invalid - skip this marker
-                    continue
+                    x_val = xlim[1] - (0.05 + i * 0.08) * x_range
             else:
-                # Auto-compute y position if not provided (stack from top)
-                y_val = ylim[1] - (0.05 + i * 0.08) * y_range
+                # Standard: xerr stacks vertically from top
+                if y_val is not None:
+                    if isinstance(y_val, (int, float)) and y_val >= 0 and y_val == int(y_val):
+                        y_val = ylim[1] - (0.05 + int(y_val) * 0.08) * y_range
+                    else:
+                        continue
+                else:
+                    y_val = ylim[1] - (0.05 + i * 0.08) * y_range
             
             ax.errorbar(
                 x=x_val,
@@ -326,6 +387,8 @@ class PlotTile(QFrame):
             )
         
         # Render y-error markers (vertical error bars)
+        # When flip_axes=False: yerr is error on dependent axis (Y), stack from right (X)
+        # When flip_axes=True: yerr is error on independent axis (unusual), stack from top (Y)
         for i, marker in enumerate(y_markers):
             x_val = marker.get('x')
             y_val = marker.get('y')
@@ -334,18 +397,24 @@ class PlotTile(QFrame):
             label = marker.get('label')
             marker_shape = marker.get('marker', 'v')  # Default to triangle down
             
-            # If x is provided, it must be an integer (0, 1, 2...) to select stacking level
-            if x_val is not None:
-                # Check if it's an integer or a whole number (0.0, 1.0, 2.0, etc.)
-                if isinstance(x_val, (int, float)) and x_val >= 0 and x_val == int(x_val):
-                    # Use integer as stacking level index (0-based)
-                    x_val = xlim[1] - (0.05 + int(x_val) * 0.08) * x_range
+            if self._flip_axes:
+                # yerr stacks vertically from top (along Y, the independent axis)
+                if y_val is not None:
+                    if isinstance(y_val, (int, float)) and y_val >= 0 and y_val == int(y_val):
+                        y_val = ylim[1] - (0.05 + int(y_val) * 0.08) * y_range
+                    else:
+                        continue
                 else:
-                    # Not a whole number or invalid - skip this marker
-                    continue
+                    y_val = ylim[1] - (0.05 + i * 0.08) * y_range
             else:
-                # Auto-compute x position if not provided (stack from right)
-                x_val = xlim[1] - (0.05 + i * 0.08) * x_range
+                # Standard: yerr stacks horizontally from right
+                if x_val is not None:
+                    if isinstance(x_val, (int, float)) and x_val >= 0 and x_val == int(x_val):
+                        x_val = xlim[1] - (0.05 + int(x_val) * 0.08) * x_range
+                    else:
+                        continue
+                else:
+                    x_val = xlim[1] - (0.05 + i * 0.08) * x_range
             
             ax.errorbar(
                 x=x_val,
@@ -391,8 +460,10 @@ class PlotTile(QFrame):
                     vlines=self._vlines,
                     style_line=self._style_line,
                     style_marker=self._style_marker,
+                    xlim=self._xlim,
                     ylim=self._ylim,
                     error_markers=self._error_markers,
+                    flip_axes=self._flip_axes,
                 )
     
     def clear_plot(self) -> None:
@@ -409,7 +480,9 @@ class PlotTile(QFrame):
         self._style_line = True
         self._style_marker = False
         self._ylim = None
+        self._xlim = None
         self._error_markers = []
+        self._flip_axes = False
         self.figure.clear()
         self.canvas.draw_idle()
     
@@ -443,8 +516,10 @@ class PlotTile(QFrame):
             "style_line": self._style_line,
             "style_marker": self._style_marker,
             "ylim": list(self._ylim) if self._ylim else None,  # Convert tuple to list for JSON
+            "xlim": list(self._xlim) if self._xlim else None,  # Convert tuple to list for JSON
             "title": title,
             "error_markers": self._error_markers,
+            "flip_axes": self._flip_axes,
         }
     
     def set_plot_from_data(self, df: pd.DataFrame, plot_data: dict) -> None:
@@ -459,6 +534,11 @@ class PlotTile(QFrame):
         if ylim and isinstance(ylim, list) and len(ylim) == 2:
             ylim = tuple(ylim)
         
+        # Convert xlim back to tuple if present
+        xlim = plot_data.get("xlim")
+        if xlim and isinstance(xlim, list) and len(xlim) == 2:
+            xlim = tuple(xlim)
+        
         self.set_plot(
             df=df,
             x=plot_data["x"],
@@ -468,13 +548,14 @@ class PlotTile(QFrame):
             sem_precomputed=plot_data.get("sem_precomputed", False),
             title=plot_data.get("title"),
             filter_query=plot_data.get("filter_query"),
-            xlim=None,  # xlim is computed, not saved
+            xlim=xlim,
             ylim=ylim,
             hlines=plot_data.get("hlines", []),
             vlines=plot_data.get("vlines", []),
             style_line=plot_data.get("style_line", True),
             style_marker=plot_data.get("style_marker", False),
             error_markers=plot_data.get("error_markers", []),
+            flip_axes=plot_data.get("flip_axes", False),
         )
 
 

@@ -86,6 +86,22 @@ class QuickPlotDialog(QDialog):
         style_layout.addWidget(self.style_line_check)
         style_layout.addWidget(self.style_marker_check)
         form.addRow("", style_layout)
+        
+        # Flip axes option
+        flip_label = QLabel("Axis Orientation:")
+        flip_label.setStyleSheet("font-weight: bold;")
+        form.addRow(flip_label)
+        
+        self.flip_axes_check = QCheckBox("Flip Axes (Y independent, X dependent)", self)
+        self.flip_axes_check.setChecked(False)
+        form.addRow("", self.flip_axes_check)
+        
+        # Info label about flip axes
+        flip_info = QLabel("When checked: Y-axis is independent (control), X-axis is dependent (measure). "
+                          "Lines connect vertically, SEM bands are horizontal.")
+        flip_info.setWordWrap(True)
+        flip_info.setStyleSheet("color: gray; font-size: 9px;")
+        form.addRow("", flip_info)
 
         layout.addLayout(form)
         
@@ -299,6 +315,7 @@ class QuickPlotDialog(QDialog):
             "style_marker": self.style_marker_check.isChecked(),
             "y_min": y_min,
             "y_max": y_max,
+            "flip_axes": self.flip_axes_check.isChecked(),
         }
     
     def _parse_numbers(self, text: str) -> list[float]:
