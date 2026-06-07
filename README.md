@@ -1,93 +1,103 @@
-# Plot Organizer (Work in Progress)
+# quick-plot
 
-<!-- <img width="3584" height="2240" alt="image" src="https://github.com/user-attachments/assets/b4cf363e-43cf-464a-ab9e-629f869931cc" /> -->
+[![Tests](https://github.com/<owner>/PlotOrganizer/actions/workflows/tests.yml/badge.svg)](https://github.com/<owner>/PlotOrganizer/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 
+A desktop Python GUI (PySide6) for organizing multiple line plots into a customizable grid — load a CSV, configure plots through dialogs, and export to PDF/SVG/EPS/PNG. No coding required.
 
-A desktop Python GUI (PySide6) to organize multiple line plots into a moveable grid, with CSV loading, customizable plot styles (line/markers), faceting by groups, shared axes, SEM (Standard Error of the Mean) plotting with shaded regions, reference lines for thresholds/markers, and export to PDF/SVG/EPS/PNG.
+## Features
+
+- **CSV loading** with automatic type inference (categorical, continuous, ordinal)
+- **Create plots** with x, y, hue, SEM, groups, plot style, and reference lines
+- **Multi-column hue** — combine multiple categorical columns for richer legend groupings
+- **Group faceting** — one plot per unique combination, all sharing the same axis scale
+- **SEM plotting** — mean ± SEM as a translucent shaded region (computed or pre-computed)
+- **Reference lines** — horizontal and vertical dashed lines for thresholds and markers
+- **Error marker annotations** — annotated error bars at specific plot positions
+- **Plot style** — choose line, markers, or both
+- **Grid management** — add/remove rows and columns, multi-cell spanning, grid reset
+- **Project save/load** — portable JSON `.ppo` files
+- **Export** — whole-grid PDF/SVG/EPS/PNG with configurable size and DPI
+- **Programmatic API** — create projects from Python scripts
+- **CLI / headless export** — automate export pipelines without a GUI
+
+## Installation
+
+```bash
+pip install quick-plot
+```
+
+Or from source:
+
+```bash
+git clone https://github.com/<owner>/PlotOrganizer.git
+cd PlotOrganizer
+pip install -e .
+```
 
 ## Quick Start
 
-### GUI Mode
-
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+# Launch the GUI
+quick-plot
 
-# Start GUI
-python -m plot_organizer.app
+# Load a saved project
+quick-plot my_project.ppo
 
-# Or load a project
-python -m plot_organizer.app my_project.ppo
+# Headless export (no GUI)
+quick-plot my_project.ppo --no-gui --export output.pdf
 ```
 
-### Headless Mode (CLI Export)
+See [docs/quickstart.md](docs/quickstart.md) for a step-by-step walkthrough.
 
-```bash
-# Export project without GUI
-python -m plot_organizer.app my_project.ppo \
-  --export output.pdf \
-  --no-gui \
-  --format pdf \
-  --width 11 \
-  --height 8.5
-```
-
-### Programmatic API
+## Programmatic API
 
 ```python
-from plot_organizer.api import *
+from plot_organizer.api import quick_project, create_plot, save_project_file
 
-# Create plots programmatically
 plots = [
-    create_plot("", x="time", y="value", 
-                hue=["model", "dataset"], row=0, col=0),
-    create_plot("", x="time", y="error", row=0, col=1),
+    create_plot("", x="time", y="accuracy", hue=["model", "dataset"], row=0, col=0),
+    create_plot("", x="time", y="loss", hlines=[0.5], row=0, col=1),
 ]
 
-# Save project
-project = quick_project("Experiment", "data.csv", plots)
+project = quick_project("Experiment", "data/results.csv", plots)
 save_project_file(project, "experiment.ppo")
 ```
 
-See `examples/` directory for more details.
+See `examples/` for runnable scripts.
 
-**NumPy 2 Compatibility:** This project requires NumPy >= 2.0. If you encounter NumPy import errors, reinstall dependencies to get NumPy 2-compatible wheels:
-```bash
-pip uninstall -y pandas matplotlib pyarrow
-pip install --no-cache-dir -r requirements.txt
-```
+## Documentation
 
-## Structure
+| Document | Description |
+|----------|-------------|
+| [docs/quickstart.md](docs/quickstart.md) | Installation and first-use guide |
+| [docs/features.md](docs/features.md) | Complete feature reference |
+| [docs/roadmap.md](docs/roadmap.md) | Planned features and known gaps |
+| [docs/design.md](docs/design.md) | Architecture and design decisions |
+| [CHANGELOG.md](CHANGELOG.md) | Version history |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
 
-- `plot_organizer/app.py`: Entrypoint launching the Qt `MainWindow` and `GridBoard`.
-- `plot_organizer/models/`: Dataclasses for data sources, plot specs, instances, and grid layout.
-- `plot_organizer/services/`: Core logic: group expansion, shared limits, loading/type inference, rendering, layout ops, export, project save.
-- `plot_organizer/ui/`: Minimal UI: `MainWindow` with a center `GridBoard` to hold tiles.
-
-## Tests
+## Running Tests
 
 ```bash
 pytest
 ```
 
-## Status
+## Project Structure
 
-- ✅ CSV loading with automatic type inference
-- ✅ Plot creation with x, y, hue (single or multi-column), SEM column, groups, plot style, and reference lines
-- ✅ Multi-column hue (combine multiple categorical columns)
-- ✅ Plot style customization (line, markers, or both)
-- ✅ Reference lines (horizontal & vertical dashed lines)
-- ✅ SEM (Standard Error of the Mean) with shaded regions
-- ✅ Pre-computed SEM support (use SEM values directly from data)
-- ✅ Group faceting (multi-select columns, up to 100 combinations)
-- ✅ SEM-aware shared axes across grouped plots
-- ✅ Automatic aggregation of duplicate values
-- ✅ Plot settings for position and spanning
-- ✅ Grid management (add/remove rows/cols, reset to default)
-- ✅ Whole-grid export to PDF/SVG/EPS/PNG
-- ✅ **Project save/load** (JSON format, .ppo files)
-- ✅ **CLI support** (load projects, headless export)
-- ✅ **Programmatic API** (create plots via Python code)
+```
+plot_organizer/
+├── models/     # Pure Python dataclasses (no Qt dependencies)
+├── services/   # Business logic: CSV loading, plotting, export, project I/O
+├── ui/         # Qt widgets: main window, grid board, dialogs
+├── tests/      # pytest test suite (107+ tests)
+├── app.py      # CLI entry point
+└── api.py      # Programmatic API
+examples/       # Runnable example scripts
+docs/           # Documentation
+```
 
-See `design.md` for the complete design plan and `QUICKSTART.md` for usage guide.
+## License
+
+MIT — see [LICENSE](LICENSE).

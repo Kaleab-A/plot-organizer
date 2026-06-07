@@ -37,11 +37,11 @@ def test_expand_groups_two_columns():
 
 
 def test_expand_groups_exceeds_limit():
-    # Create a dataframe that would generate > 100 combinations
+    # Create a dataframe that would generate > 200 combinations (21 × 10 = 210)
     df = pd.DataFrame({
-        "cat1": list(range(20)) * 5,
-        "cat2": [i % 10 for i in range(100)],
-        "val": range(100)
+        "cat1": list(range(21)) * 10,
+        "cat2": [i % 10 for i in range(210)],
+        "val": range(210)
     })
     with pytest.raises(ValueError, match="Too many combinations"):
         expand_groups(df, ["cat1", "cat2"])

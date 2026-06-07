@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quick-plot"
+version = "0.8.0"
+description = "GUI tool for quickly creating and organizing customized plots from CSV files — no coding required"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+keywords = ["plotting", "visualization", "csv", "gui", "matplotlib"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
+dependencies = [
+    "PySide6>=6.6",
+    "pandas>=2.3.0",
+    "matplotlib>=3.10.0",
+    "numpy>=2.0",
+    "pyarrow>=17.0.0",
+]
+
+[project.scripts]
+quick-plot = "plot_organizer.app:run"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["plot_organizer*"]
