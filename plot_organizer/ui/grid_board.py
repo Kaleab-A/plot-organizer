@@ -41,6 +41,8 @@ class PlotTile(QFrame):
         self._style_marker: bool = False
         self._ylim: Optional[tuple[float, float]] = None
         self._xlim: Optional[tuple[float, float]] = None
+        self._xticks: Optional[list[float]] = None  # Custom x-axis tick values
+        self._yticks: Optional[list[float]] = None  # Custom y-axis tick values
         self._error_markers: list[dict] = []
         self._flip_axes: bool = False  # When True, Y is independent, X is dependent
         self.setContextMenuPolicy(Qt.DefaultContextMenu)
@@ -92,6 +94,8 @@ class PlotTile(QFrame):
         style_marker: bool = False,
         error_markers: Optional[list[dict]] = None,
         flip_axes: bool = False,
+        xticks: Optional[list[float]] = None,
+        yticks: Optional[list[float]] = None,
     ) -> None:
         self._df, self._x, self._y, self._hue = df, x, y, hue
         self._sem_column = sem_column
@@ -103,6 +107,8 @@ class PlotTile(QFrame):
         self._style_marker = style_marker
         self._ylim = ylim  # Store y-limits for export
         self._xlim = xlim  # Store x-limits for export
+        self._xticks = xticks  # Custom x-axis tick values
+        self._yticks = yticks  # Custom y-axis tick values
         self._error_markers = error_markers or []
         self._flip_axes = flip_axes  # When True, Y is independent, X is dependent
         
@@ -166,6 +172,12 @@ class PlotTile(QFrame):
             ax.set_xlim(xlim)
         if ylim:
             ax.set_ylim(ylim)
+        
+        # Apply custom tick labels if specified
+        if xticks:
+            ax.set_xticks(xticks)
+        if yticks:
+            ax.set_yticks(yticks)
         
         # Draw reference lines
         for yval in self._hlines:
@@ -534,6 +546,8 @@ class PlotTile(QFrame):
         self._style_marker = False
         self._ylim = None
         self._xlim = None
+        self._xticks = None
+        self._yticks = None
         self._error_markers = []
         self._flip_axes = False
         self.figure.clear()
@@ -570,6 +584,8 @@ class PlotTile(QFrame):
             "style_marker": self._style_marker,
             "ylim": list(self._ylim) if self._ylim else None,  # Convert tuple to list for JSON
             "xlim": list(self._xlim) if self._xlim else None,  # Convert tuple to list for JSON
+            "xticks": self._xticks,  # Already a list
+            "yticks": self._yticks,  # Already a list
             "title": title,
             "error_markers": self._error_markers,
             "flip_axes": self._flip_axes,
@@ -609,6 +625,8 @@ class PlotTile(QFrame):
             style_marker=plot_data.get("style_marker", False),
             error_markers=plot_data.get("error_markers", []),
             flip_axes=plot_data.get("flip_axes", False),
+            xticks=plot_data.get("xticks"),
+            yticks=plot_data.get("yticks"),
         )
 
 

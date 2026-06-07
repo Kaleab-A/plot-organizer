@@ -152,7 +152,11 @@ class MainWindow(QMainWindow):
         style_marker = sel.get("style_marker", False)
         y_min = sel.get("y_min")
         y_max = sel.get("y_max")
+        x_min = sel.get("x_min")
+        x_max = sel.get("x_max")
         flip_axes = sel.get("flip_axes", False)
+        xticks = sel.get("xticks")
+        yticks = sel.get("yticks")
         
         # Expand groups to create multiple plots
         try:
@@ -165,17 +169,21 @@ class MainWindow(QMainWindow):
         xlim, ylim = None, None
         xlim_auto, ylim_auto = True, True  # Track if limits are auto-computed
         
-        # Check if custom y-limits are provided
+        # Check if custom limits are provided
         if y_min is not None and y_max is not None:
-            # Use custom y-limits for all plots
             ylim = (y_min, y_max)
             ylim_auto = False  # Manual limit
-        elif len(filter_queries) > 1:
-            # Auto-compute shared limits for multiple plots
+        
+        if x_min is not None and x_max is not None:
+            xlim = (x_min, x_max)
+            xlim_auto = False  # Manual limit
+        
+        # Auto-compute shared limits for multiple plots (if not manually set)
+        if len(filter_queries) > 1 and (xlim is None or ylim is None):
             if sem_column:
                 # Use SEM-aware limits calculation
                 from plot_organizer.services.plot_service import shared_limits_with_sem
-                xlim, ylim = shared_limits_with_sem(df, filter_queries, x, y, sem_column, hue, sem_precomputed, flip_axes)
+                auto_xlim, auto_ylim = shared_limits_with_sem(df, filter_queries, x, y, sem_column, hue, sem_precomputed, flip_axes)
             else:
                 # Use original limits calculation
                 subsets = []
@@ -184,7 +192,13 @@ class MainWindow(QMainWindow):
                     for col, val in fq.items():
                         subset = subset[subset[col] == val]
                     subsets.append(subset)
-                xlim, ylim = shared_limits(subsets, x, y, flip_axes)
+                auto_xlim, auto_ylim = shared_limits(subsets, x, y, flip_axes)
+            
+            # Only use auto-computed limits if not manually set
+            if xlim is None:
+                xlim = auto_xlim
+            if ylim is None:
+                ylim = auto_ylim
         
         # Expand limits to include reference lines (padding only for auto-computed)
         xlim, ylim = self._expand_limits_for_reference_lines(xlim, ylim, hlines, vlines, xlim_auto, ylim_auto)
@@ -221,6 +235,8 @@ class MainWindow(QMainWindow):
                 style_line=style_line,
                 style_marker=style_marker,
                 flip_axes=flip_axes,
+                xticks=xticks,
+                yticks=yticks,
             )
             # Connect signals for new tiles
             tile.settings_requested.connect(self._on_tile_settings, Qt.UniqueConnection)

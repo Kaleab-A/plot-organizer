@@ -27,7 +27,13 @@ def build_schema(df: pd.DataFrame) -> list[ColumnSchema]:
         var_type = infer_var_type(col)
         categories = None
         if var_type in {"categorical", "ordinal"}:
-            categories = sorted(col.dropna().unique().tolist())
+            # Convert to strings first to handle mixed types (e.g., strings and numbers)
+            unique_vals = col.dropna().unique().tolist()
+            try:
+                categories = sorted(unique_vals)
+            except TypeError:
+                # Mixed types that can't be compared directly - convert to strings
+                categories = sorted(str(v) for v in unique_vals)
         schema.append(
             ColumnSchema(
                 name=name,
@@ -44,7 +50,7 @@ def load_csv_to_datasource(path: str, name: Optional[str] = None) -> DataSource:
 
     This is a synchronous loader; call it from a worker thread in the UI.
     """
-    df = pd.read_csv(path)
+    df = pd.read_csv(path, low_memory=False)
     schema = build_schema(df)
     ds = DataSource(
         id=str(uuid.uuid4()),

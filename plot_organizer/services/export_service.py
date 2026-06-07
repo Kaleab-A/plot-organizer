@@ -234,6 +234,14 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
     if xlim is not None:
         ax.set_xlim(xlim)
     
+    # Apply custom tick labels if present
+    xticks = getattr(tile, "_xticks", None)
+    if xticks is not None:
+        ax.set_xticks(xticks)
+    yticks = getattr(tile, "_yticks", None)
+    if yticks is not None:
+        ax.set_yticks(yticks)
+    
     # Draw reference lines
     for yval in tile._hlines:
         ax.axhline(y=yval, color='black', linestyle='--', linewidth=1, alpha=0.7, zorder=1)

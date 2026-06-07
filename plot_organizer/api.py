@@ -78,6 +78,8 @@ def create_plot(
     style_marker: bool = False,
     ylim: tuple[float, float] | list[float] | None = None,
     xlim: tuple[float, float] | list[float] | None = None,
+    xticks: list[float] | None = None,
+    yticks: list[float] | None = None,
     title: str | None = None,
     error_markers: list[dict[str, Any]] | None = None,
     flip_axes: bool = False,
@@ -105,6 +107,8 @@ def create_plot(
         style_marker: Show markers (default: False)
         ylim: Y-axis limits as (min, max) tuple or list
         xlim: X-axis limits as (min, max) tuple or list
+        xticks: Custom x-axis tick values (in order to display). If None, use default.
+        yticks: Custom y-axis tick values (in order to display). If None, use default.
         title: Plot title
         error_markers: List of error bar marker dicts. Each dict should have:
             - x, y: position values. For horizontal bars (xerr), y can be integer 0,1,2...
@@ -154,6 +158,8 @@ def create_plot(
         "style_marker": style_marker,
         "ylim": list(ylim) if ylim else None,
         "xlim": list(xlim) if xlim else None,
+        "xticks": xticks,
+        "yticks": yticks,
         "title": title,
         "error_markers": error_markers or [],
         "flip_axes": flip_axes,
@@ -297,6 +303,8 @@ def create_grouped_plots(
     style_marker: bool = False,
     ylim: tuple[float, float] | list[float] | None = None,
     xlim: tuple[float, float] | list[float] | None = None,
+    xticks: list[float] | None = None,
+    yticks: list[float] | None = None,
     error_markers: list[dict[str, Any]] | None = None,
     flip_axes: bool = False,
 ) -> list[dict[str, Any]]:
@@ -324,6 +332,8 @@ def create_grouped_plots(
         style_marker: Show markers
         ylim: Manual y-limits (if None, auto-computed and shared)
         xlim: Manual x-limits (if None, auto-computed and shared)
+        xticks: Custom x-axis tick values (in order to display). If None, use default.
+        yticks: Custom y-axis tick values (in order to display). If None, use default.
         error_markers: List of error bar markers to add to each plot
         flip_axes: If True, Y is independent, X is dependent. (default: False)
     
@@ -347,8 +357,11 @@ def create_grouped_plots(
     """
     from plot_organizer.services.plot_service import expand_groups, shared_limits, shared_limits_with_sem
     
-    # Load dataframe to compute limits
-    df = pd.read_csv(dataframe_path)
+    # Load dataframe to compute limits.
+    # low_memory=False ensures consistent type inference across the full file —
+    # avoids mixed int/str for columns that contain both numeric and non-numeric
+    # values (e.g. "Dim" column with values 1, 2, 3 and "All").
+    df = pd.read_csv(dataframe_path, low_memory=False)
     
     # Expand groups to get filter queries
     filter_queries = expand_groups(df, groups)
@@ -421,6 +434,8 @@ def create_grouped_plots(
             style_marker=style_marker,
             ylim=computed_ylim,
             xlim=computed_xlim,
+            xticks=xticks,
+            yticks=yticks,
             title=title,
             error_markers=error_markers,
             flip_axes=flip_axes,

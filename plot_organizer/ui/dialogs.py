@@ -156,6 +156,47 @@ class QuickPlotDialog(QDialog):
         # Connect checkbox to enable/disable spinboxes
         self.custom_ylim_check.stateChanged.connect(self._toggle_ylim_fields)
         
+        # X-axis limits section
+        xlim_group = QGroupBox("X-axis Limits (optional)")
+        xlim_layout = QVBoxLayout()
+        
+        # Checkbox to enable custom x-limits
+        self.custom_xlim_check = QCheckBox("Use custom X-axis limits", self)
+        self.custom_xlim_check.setChecked(False)
+        xlim_layout.addWidget(self.custom_xlim_check)
+        
+        # X-axis min/max fields
+        xlim_form = QFormLayout()
+        self.xmin_spin = QDoubleSpinBox(self)
+        self.xmin_spin.setMinimum(-1e9)
+        self.xmin_spin.setMaximum(1e9)
+        self.xmin_spin.setValue(0.0)
+        self.xmin_spin.setDecimals(6)
+        self.xmin_spin.setEnabled(False)
+        xlim_form.addRow("X-axis min:", self.xmin_spin)
+        
+        self.xmax_spin = QDoubleSpinBox(self)
+        self.xmax_spin.setMinimum(-1e9)
+        self.xmax_spin.setMaximum(1e9)
+        self.xmax_spin.setValue(1.0)
+        self.xmax_spin.setDecimals(6)
+        self.xmax_spin.setEnabled(False)
+        xlim_form.addRow("X-axis max:", self.xmax_spin)
+        
+        xlim_layout.addLayout(xlim_form)
+        
+        # Info label
+        xlim_info = QLabel("Applied to all plots in this set")
+        xlim_info.setWordWrap(True)
+        xlim_info.setStyleSheet("color: gray; font-size: 9px;")
+        xlim_layout.addWidget(xlim_info)
+        
+        xlim_group.setLayout(xlim_layout)
+        layout.addWidget(xlim_group)
+        
+        # Connect checkbox to enable/disable spinboxes
+        self.custom_xlim_check.stateChanged.connect(self._toggle_xlim_fields)
+        
         # Reference lines section
         ref_lines_group = QGroupBox("Reference Lines (optional)")
         ref_lines_layout = QVBoxLayout()
@@ -178,6 +219,35 @@ class QuickPlotDialog(QDialog):
         
         ref_lines_group.setLayout(ref_lines_layout)
         layout.addWidget(ref_lines_group)
+        
+        # Axis tick labels section
+        tick_labels_group = QGroupBox("Custom Axis Tick Labels (optional)")
+        tick_labels_layout = QVBoxLayout()
+        
+        # X-axis tick labels
+        xticks_layout = QHBoxLayout()
+        xticks_layout.addWidget(QLabel("X-axis ticks:"))
+        self.xticks_input = QLineEdit(self)
+        self.xticks_input.setPlaceholderText("e.g., 0, 5, 10, 15 (comma-separated)")
+        xticks_layout.addWidget(self.xticks_input)
+        tick_labels_layout.addLayout(xticks_layout)
+        
+        # Y-axis tick labels
+        yticks_layout = QHBoxLayout()
+        yticks_layout.addWidget(QLabel("Y-axis ticks:"))
+        self.yticks_input = QLineEdit(self)
+        self.yticks_input.setPlaceholderText("e.g., 0, 25, 50, 75, 100 (comma-separated)")
+        yticks_layout.addWidget(self.yticks_input)
+        tick_labels_layout.addLayout(yticks_layout)
+        
+        # Info label
+        tick_info = QLabel("If specified, only show ticks at these values (in the order provided). Leave blank for default.")
+        tick_info.setWordWrap(True)
+        tick_info.setStyleSheet("color: gray; font-size: 9px;")
+        tick_labels_layout.addWidget(tick_info)
+        
+        tick_labels_group.setLayout(tick_labels_layout)
+        layout.addWidget(tick_labels_group)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, parent=self)
         layout.addWidget(buttons)
@@ -241,6 +311,12 @@ class QuickPlotDialog(QDialog):
         enabled = self.custom_ylim_check.isChecked()
         self.ymin_spin.setEnabled(enabled)
         self.ymax_spin.setEnabled(enabled)
+    
+    def _toggle_xlim_fields(self) -> None:
+        """Enable/disable X-axis limit spinboxes based on checkbox state."""
+        enabled = self.custom_xlim_check.isChecked()
+        self.xmin_spin.setEnabled(enabled)
+        self.xmax_spin.setEnabled(enabled)
 
     def selection(self) -> Optional[dict]:
         if self.result() != QDialog.Accepted:
@@ -301,6 +377,25 @@ class QuickPlotDialog(QDialog):
                 )
                 return None
         
+        # Get custom x-limits if enabled
+        x_min = None
+        x_max = None
+        if self.custom_xlim_check.isChecked():
+            x_min = self.xmin_spin.value()
+            x_max = self.xmax_spin.value()
+            # Validate that min < max
+            if x_min >= x_max:
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.warning(
+                    self, "Invalid X-limits",
+                    f"X-axis min ({x_min}) must be less than X-axis max ({x_max})."
+                )
+                return None
+        
+        # Parse custom tick labels
+        xticks = self._parse_numbers(self.xticks_input.text())
+        yticks = self._parse_numbers(self.yticks_input.text())
+        
         return {
             "datasource_id": self.ds_combo.currentData(),
             "x": x,
@@ -315,7 +410,11 @@ class QuickPlotDialog(QDialog):
             "style_marker": self.style_marker_check.isChecked(),
             "y_min": y_min,
             "y_max": y_max,
+            "x_min": x_min,
+            "x_max": x_max,
             "flip_axes": self.flip_axes_check.isChecked(),
+            "xticks": xticks if xticks else None,
+            "yticks": yticks if yticks else None,
         }
     
     def _parse_numbers(self, text: str) -> list[float]:
