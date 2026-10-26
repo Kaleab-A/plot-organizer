@@ -301,7 +301,7 @@ plot_organizer/
 - **Multi‑Y** (dual axis): extend `PlotSpec` to allow `y2`, `twinx` rendering.
 - **More plot types**: bar, scatter, area; attach `plot_kind` enum and per‑kind renderers.
 - **Transforms**: computed columns (rolling mean, resample), saved as part of DataSource pipeline.
-- **Filters**: quick filter builder per plot instance.
+- **Filters**: ✅ implemented as a pandas query-style `data_filter` expression per plot (see `services/filter_service.py` and docs/features.md#data-filtering).
 - **Theme**: global light/dark toggle; save in project.
 - **Resizing/Spanning**: variable cell sizes and row/col spanning.
 - **Packaging**: PyInstaller one‑file distribution.

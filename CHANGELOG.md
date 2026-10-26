@@ -5,6 +5,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Data Filtering**: a "Data Filter" box in the Create Plot dialog accepts a pandas query-style expression (e.g. `time >= 0 and Country in ["USA", "Canada"]`) that selects rows before plotting. Group combinations, shared axis limits, hue and SEM are computed from the matching rows.
+  - Live row count, readable error messages, and warnings for type mismatches that silently match nothing (e.g. `n_features == "22"`).
+  - Date-like text columns are compared as dates, so `date >= "2024-01-01"` works for non-ISO formats.
+  - Expressions are checked against an allowlist before evaluation, because `.ppo` files can be shared.
+  - Saved as `data_filter` in `.ppo` files. Older projects load unchanged.
+  - `create_plot()` / `create_grouped_plots()` accept `data_filter=`.
+- `services/filter_service.py` with `apply_data_filter()`, `apply_filters()`, `column_kind()` and `filter_warnings()`.
+
+### Fixed
+- Editing error markers no longer drops custom x/y tick values from the plot.
+
+### Tests
+- `test_data_filter.py`: 55 tests covering column types, operators, dates, error messages, rejected expressions, lint warnings, tiles, save/load, export, the dialog and the API.
+
+---
+
 ## [0.8.0] – 2025-10-12
 
 ### Added

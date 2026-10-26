@@ -11,6 +11,7 @@ from plot_organizer.ui.data_manager import DataManagerDock
 from plot_organizer.ui.dialogs import QuickPlotDialog, PlotSettingsDialog, ExportDialog
 from plot_organizer.services.load_service import load_csv_to_datasource
 from plot_organizer.services.plot_service import expand_groups, shared_limits
+from plot_organizer.services.filter_service import FilterError, apply_data_filter, apply_filters
 from plot_organizer.services.export_service import export_grid
 from plot_organizer.services.project_service import save_workspace, load_workspace
 
@@ -130,7 +131,12 @@ class MainWindow(QMainWindow):
         if not self._datasources:
             QMessageBox.information(self, "Quick Plot", "Please add a CSV first.")
             return
-        dlg = QuickPlotDialog(self, ds_to_columns=self._ds_columns, ds_names=self._ds_names)
+        dlg = QuickPlotDialog(
+            self,
+            ds_to_columns=self._ds_columns,
+            ds_names=self._ds_names,
+            ds_to_df={ds_id: ds.dataframe for ds_id, ds in self._datasources.items()},  # type: ignore[attr-defined]
+        )
         if dlg.exec() != QDialog.Accepted:
             return
         sel = dlg.selection()
@@ -157,10 +163,19 @@ class MainWindow(QMainWindow):
         flip_axes = sel.get("flip_axes", False)
         xticks = sel.get("xticks")
         yticks = sel.get("yticks")
+        data_filter = sel.get("data_filter")
+        
+        # Apply the data filter first so groups and shared limits only see matching rows.
+        # Tiles keep the original dataframe (used to identify the datasource on save).
+        try:
+            filtered_df = apply_data_filter(df, data_filter)
+        except FilterError as e:
+            QMessageBox.warning(self, "Invalid Data Filter", str(e))
+            return
         
         # Expand groups to create multiple plots
         try:
-            filter_queries = expand_groups(df, groups)
+            filter_queries = expand_groups(filtered_df, groups)
         except ValueError as e:
             QMessageBox.warning(self, "Too Many Combinations", str(e))
             return
@@ -183,15 +198,10 @@ class MainWindow(QMainWindow):
             if sem_column:
                 # Use SEM-aware limits calculation
                 from plot_organizer.services.plot_service import shared_limits_with_sem
-                auto_xlim, auto_ylim = shared_limits_with_sem(df, filter_queries, x, y, sem_column, hue, sem_precomputed, flip_axes)
+                auto_xlim, auto_ylim = shared_limits_with_sem(filtered_df, filter_queries, x, y, sem_column, hue, sem_precomputed, flip_axes)
             else:
                 # Use original limits calculation
-                subsets = []
-                for fq in filter_queries:
-                    subset = df
-                    for col, val in fq.items():
-                        subset = subset[subset[col] == val]
-                    subsets.append(subset)
+                subsets = [apply_filters(filtered_df, filter_query=fq) for fq in filter_queries]
                 auto_xlim, auto_ylim = shared_limits(subsets, x, y, flip_axes)
             
             # Only use auto-computed limits if not manually set
@@ -237,6 +247,7 @@ class MainWindow(QMainWindow):
                 flip_axes=flip_axes,
                 xticks=xticks,
                 yticks=yticks,
+                data_filter=data_filter,
             )
             # Connect signals for new tiles
             tile.settings_requested.connect(self._on_tile_settings, Qt.UniqueConnection)

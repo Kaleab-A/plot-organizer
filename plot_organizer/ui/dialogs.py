@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-from PySide6.QtCore import Qt
+import pandas as pd
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -21,15 +22,50 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QCheckBox,
+    QPlainTextEdit,
+    QMessageBox,
+)
+
+from plot_organizer.services.filter_service import (
+    FilterError,
+    apply_data_filter,
+    column_kind,
+    filter_warnings,
+    format_literal,
+    is_numeric_like,
+    quote_column,
+    validate_expression,
+)
+
+
+FILTER_HELP = (
+    "Combine conditions with and / or / not and parentheses.\n"
+    "  time >= 0 and C < 0.1\n"
+    "  Country == \"USA\" or Country == \"Canada\"\n"
+    "  Country in [\"USA\", \"Canada\"]\n"
+    "  `Number of employees` > 1000      (backticks for names with spaces)\n"
+    "  Industry.str.contains(\"Tech\", case=False)\n"
+    "  date >= \"2024-01-01\"   or   date.dt.year == 2024\n"
+    "  score.notna()   /   score.isna()\n"
+    "Quote text values (\"USA\", \"1\"); numbers and True/False need no quotes.\n"
+    "Rows with missing values fail comparisons, except != which keeps them."
 )
 
 
 class QuickPlotDialog(QDialog):
-    def __init__(self, parent=None, *, ds_to_columns: Dict[str, List[str]], ds_names: Dict[str, str]):
+    def __init__(
+        self,
+        parent=None,
+        *,
+        ds_to_columns: Dict[str, List[str]],
+        ds_names: Dict[str, str],
+        ds_to_df: Optional[Dict[str, pd.DataFrame]] = None,
+    ):
         super().__init__(parent)
         self.setWindowTitle("Create Plot")
         self._ds_to_columns = ds_to_columns
         self._ds_names = ds_names
+        self._ds_to_df = ds_to_df or {}
 
         layout = QVBoxLayout(self)
         form = QFormLayout()
@@ -104,6 +140,49 @@ class QuickPlotDialog(QDialog):
         form.addRow("", flip_info)
 
         layout.addLayout(form)
+        
+        # Data filter section (pandas query expression applied before plotting)
+        filter_group = QGroupBox("Data Filter (optional)")
+        filter_layout = QVBoxLayout()
+        
+        self.filter_input = QPlainTextEdit(self)
+        self.filter_input.setPlaceholderText('e.g., time >= 0 and Country in ["USA", "Canada"]')
+        self.filter_input.setMaximumHeight(60)
+        self.filter_input.setToolTip(FILTER_HELP)
+        filter_layout.addWidget(self.filter_input)
+        
+        insert_layout = QHBoxLayout()
+        insert_layout.addWidget(QLabel("Insert column:"))
+        self.filter_column_combo = QComboBox(self)
+        insert_layout.addWidget(self.filter_column_combo, 1)
+        self.filter_help_button = QPushButton("Syntax help", self)
+        insert_layout.addWidget(self.filter_help_button)
+        filter_layout.addLayout(insert_layout)
+        
+        # Sample values for the last inserted column, written in filter syntax
+        self.filter_hint_label = QLabel("")
+        self.filter_hint_label.setWordWrap(True)
+        self.filter_hint_label.setStyleSheet("color: gray; font-size: 9px;")
+        filter_layout.addWidget(self.filter_hint_label)
+        
+        # Live validation result: matching row count, error, or type warnings
+        self.filter_status_label = QLabel("")
+        self.filter_status_label.setWordWrap(True)
+        filter_layout.addWidget(self.filter_status_label)
+        
+        filter_group.setLayout(filter_layout)
+        layout.addWidget(filter_group)
+        
+        # Debounce validation so large dataframes aren't filtered on every keystroke
+        self._filter_timer = QTimer(self)
+        self._filter_timer.setSingleShot(True)
+        self._filter_timer.setInterval(300)
+        self._filter_timer.timeout.connect(self._update_filter_status)
+        self.filter_input.textChanged.connect(self._filter_timer.start)
+        self.filter_column_combo.activated.connect(self._insert_filter_column)
+        self.filter_help_button.clicked.connect(
+            lambda: QMessageBox.information(self, "Data Filter Syntax", FILTER_HELP)
+        )
         
         # Groups section
         layout.addWidget(QLabel("Groups (faceting, multi-select):"))
@@ -255,7 +334,7 @@ class QuickPlotDialog(QDialog):
         self.ds_combo.currentIndexChanged.connect(self._refresh_columns)
         self.group_list.itemSelectionChanged.connect(self._update_combo_count)
         self.hue_list.itemSelectionChanged.connect(self._update_hue_count)
-        buttons.accepted.connect(self.accept)
+        buttons.accepted.connect(self._on_ok)
         buttons.rejected.connect(self.reject)
 
         self._refresh_columns()
@@ -284,6 +363,101 @@ class QuickPlotDialog(QDialog):
         for c in cols:
             self.hue_list.addItem(c)
         self._update_hue_count()
+        
+        # Refresh filter column picker and re-validate against the new data source
+        df = self._current_df()
+        self.filter_column_combo.clear()
+        self.filter_column_combo.addItem("(choose a column…)", None)
+        for c in cols:
+            label = f"{c} ({column_kind(df[c])})" if df is not None and c in df.columns else c
+            self.filter_column_combo.addItem(label, c)
+        self.filter_hint_label.setText("")
+        self._update_filter_status()
+    
+    def _current_df(self) -> Optional[pd.DataFrame]:
+        return self._ds_to_df.get(self.ds_combo.currentData())
+    
+    def _insert_filter_column(self, index: int) -> None:
+        """Insert the chosen column name at the cursor and show sample values."""
+        col = self.filter_column_combo.itemData(index)
+        self.filter_column_combo.setCurrentIndex(0)
+        if not col:
+            return
+        self.filter_input.insertPlainText(quote_column(col))
+        self.filter_input.setFocus()
+        
+        df = self._current_df()
+        if df is None or col not in df.columns:
+            return
+        series = df[col]
+        kind = column_kind(series)
+        samples = ", ".join(format_literal(v) for v in series.dropna().unique()[:6])
+        if kind == "numeric":
+            how = "numbers — no quotes"
+        elif kind == "boolean":
+            how = "True/False — no quotes"
+        elif kind == "datetime":
+            how = 'dates — compare with date strings, e.g. >= "2024-01-01"'
+        elif is_numeric_like(series):
+            how = 'text that looks numeric — quote values, e.g. == "1"'
+        else:
+            how = "text — quote values"
+        self.filter_hint_label.setText(f"{col} ({how}): {samples}, …")
+    
+    def _evaluate_filter(self) -> tuple[Optional[str], Optional[int], Optional[str], list[str]]:
+        """Return (expression, matching rows, error message, warnings) for the current filter."""
+        expr = self.filter_input.toPlainText().strip() or None
+        if not expr:
+            return None, None, None, []
+        df = self._current_df()
+        try:
+            if df is None:
+                # No data available (e.g. tests): syntax/safety check only
+                validate_expression(expr)
+                return expr, None, None, []
+            matched = len(apply_data_filter(df, expr))
+        except FilterError as e:
+            return expr, None, str(e), []
+        return expr, matched, None, filter_warnings(df, expr)
+    
+    def _update_filter_status(self) -> None:
+        expr, matched, error, warnings = self._evaluate_filter()
+        if not expr:
+            self.filter_status_label.setText("")
+            return
+        if error:
+            self.filter_status_label.setStyleSheet("color: #c62828; font-size: 10px;")
+            self.filter_status_label.setText(f"✗ {error}")
+            return
+        lines = []
+        if matched is not None:
+            total = len(self._current_df())  # type: ignore[arg-type]
+            if matched:
+                lines.append(f"✓ {matched:,} of {total:,} rows match")
+            else:
+                lines.append(f"⚠ 0 of {total:,} rows match — the plot will be empty")
+        lines.extend(f"⚠ {w}" for w in warnings)
+        color = "#2e7d32" if matched and not warnings else "#b26a00"
+        self.filter_status_label.setStyleSheet(f"color: {color}; font-size: 10px;")
+        self.filter_status_label.setText("\n".join(lines))
+    
+    def _on_ok(self) -> None:
+        """Keep the dialog open if the data filter is invalid or matches nothing."""
+        expr, matched, error, _ = self._evaluate_filter()
+        if error:
+            self._update_filter_status()
+            QMessageBox.warning(self, "Invalid Data Filter", error)
+            return
+        if expr and matched == 0:
+            reply = QMessageBox.question(
+                self, "No Matching Rows",
+                "The data filter matches no rows, so the plot will be empty.\n"
+                "Create the plot anyway?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+        self.accept()
     
     def _update_combo_count(self) -> None:
         selected = [item.text() for item in self.group_list.selectedItems()]
@@ -396,6 +570,11 @@ class QuickPlotDialog(QDialog):
         xticks = self._parse_numbers(self.xticks_input.text())
         yticks = self._parse_numbers(self.yticks_input.text())
         
+        # Data filter (already confirmed in _on_ok; re-checked for programmatic accept)
+        data_filter, _, filter_error, _ = self._evaluate_filter()
+        if filter_error:
+            return None
+        
         return {
             "datasource_id": self.ds_combo.currentData(),
             "x": x,
@@ -415,6 +594,7 @@ class QuickPlotDialog(QDialog):
             "flip_axes": self.flip_axes_check.isChecked(),
             "xticks": xticks if xticks else None,
             "yticks": yticks if yticks else None,
+            "data_filter": data_filter,
         }
     
     def _parse_numbers(self, text: str) -> list[float]:
