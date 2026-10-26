@@ -9,6 +9,8 @@ from matplotlib.gridspec import GridSpec
 import pandas as pd
 from matplotlib.ticker import AutoMinorLocator
 
+from plot_organizer.services.filter_service import FilterError, apply_filters
+
 if TYPE_CHECKING:
     from plot_organizer.ui.grid_board import GridBoard, PlotTile
 
@@ -103,12 +105,14 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
     else:
         fmt = '-'   # Line only (default)
     
-    # Apply filter if present
-    plot_df = df
-    if filter_query:
-        for col, val in filter_query.items():
-            plot_df = plot_df[plot_df[col] == val]
-    
+    # Apply data filter and group filter if present
+    try:
+        plot_df = apply_filters(df, getattr(tile, "_data_filter", None), filter_query)
+    except FilterError as e:
+        plot_df = df.iloc[0:0]
+        ax.text(0.5, 0.5, f"Filter error:\n{e}", ha='center', va='center',
+                transform=ax.transAxes, color='red', fontsize='small', wrap=True)
+
     # Helper functions for plotting with flip_axes support
     def plot_line(ind_data, dep_data, fmt_str, label=None):
         """Plot line with coordinates based on flip_axes setting."""

@@ -83,6 +83,7 @@ def create_plot(
     title: str | None = None,
     error_markers: list[dict[str, Any]] | None = None,
     flip_axes: bool = False,
+    data_filter: str | None = None,
 ) -> dict[str, Any]:
     """Create a plot descriptor.
     
@@ -101,6 +102,9 @@ def create_plot(
         sem_column: Column for SEM calculation or pre-computed SEM values
         sem_precomputed: If True, use sem_column values directly (default: False)
         filter_query: Dict of column=value filters to apply
+        data_filter: pandas query expression applied before filter_query, e.g.
+            'time >= 0 and Country in ["USA", "Canada"]'. Quote text values and wrap
+            column names containing spaces in backticks. See docs/features.md.
         hlines: List of y-values for horizontal reference lines
         vlines: List of x-values for vertical reference lines
         style_line: Show lines (default: True)
@@ -152,6 +156,7 @@ def create_plot(
         "sem_column": sem_column,
         "sem_precomputed": sem_precomputed,
         "filter_query": filter_query,
+        "data_filter": data_filter,
         "hlines": hlines or [],
         "vlines": vlines or [],
         "style_line": style_line,
@@ -307,6 +312,7 @@ def create_grouped_plots(
     yticks: list[float] | None = None,
     error_markers: list[dict[str, Any]] | None = None,
     flip_axes: bool = False,
+    data_filter: str | None = None,
 ) -> list[dict[str, Any]]:
     """Create multiple plots from group columns with shared axis limits.
     
@@ -336,9 +342,14 @@ def create_grouped_plots(
         yticks: Custom y-axis tick values (in order to display). If None, use default.
         error_markers: List of error bar markers to add to each plot
         flip_axes: If True, Y is independent, X is dependent. (default: False)
+        data_filter: pandas query expression applied before grouping, so only
+            combinations and limits from matching rows are used.
     
     Returns:
         List of plot dicts with auto-computed positions and shared limits
+    
+    Raises:
+        FilterError: If data_filter is invalid for this CSV
     
     Example:
         >>> plots = create_grouped_plots(
@@ -356,12 +367,14 @@ def create_grouped_plots(
         >>> # All plots share the same auto-computed axis limits
     """
     from plot_organizer.services.plot_service import expand_groups, shared_limits, shared_limits_with_sem
+    from plot_organizer.services.filter_service import apply_data_filter, apply_filters
     
     # Load dataframe to compute limits.
     # low_memory=False ensures consistent type inference across the full file —
     # avoids mixed int/str for columns that contain both numeric and non-numeric
     # values (e.g. "Dim" column with values 1, 2, 3 and "All").
     df = pd.read_csv(dataframe_path, low_memory=False)
+    df = apply_data_filter(df, data_filter)
     
     # Expand groups to get filter queries
     filter_queries = expand_groups(df, groups)
@@ -380,12 +393,7 @@ def create_grouped_plots(
             )
         else:
             # Standard limits
-            subsets = []
-            for fq in filter_queries:
-                subset = df
-                for col, val in fq.items():
-                    subset = subset[subset[col] == val]
-                subsets.append(subset)
+            subsets = [apply_filters(df, filter_query=fq) for fq in filter_queries]
             xlim_tuple, ylim_tuple = shared_limits(subsets, x, y, flip_axes)
         
         # Convert tuples to lists for JSON, only if not provided
@@ -439,6 +447,7 @@ def create_grouped_plots(
             title=title,
             error_markers=error_markers,
             flip_axes=flip_axes,
+            data_filter=data_filter,
         )
         plots.append(plot)
     

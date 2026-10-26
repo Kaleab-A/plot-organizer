@@ -8,19 +8,20 @@ This document describes every major feature in quick-plot, including how to use 
 
 1. [CSV Loading & Type Inference](#csv-loading--type-inference)
 2. [Creating Plots](#creating-plots)
-3. [Hue (Color Grouping)](#hue-color-grouping)
-4. [Multi-Column Hue](#multi-column-hue)
-5. [Group Faceting](#group-faceting)
-6. [SEM — Standard Error of the Mean](#sem--standard-error-of-the-mean)
-7. [Pre-computed SEM](#pre-computed-sem)
-8. [Reference Lines](#reference-lines)
-9. [Error Marker Annotations](#error-marker-annotations)
-10. [Plot Style Customization](#plot-style-customization)
-11. [Grid Management](#grid-management)
-12. [Project Save / Load](#project-save--load)
-13. [Export](#export)
-14. [Programmatic API](#programmatic-api)
-15. [CLI / Headless Export](#cli--headless-export)
+3. [Data Filtering](#data-filtering)
+4. [Hue (Color Grouping)](#hue-color-grouping)
+5. [Multi-Column Hue](#multi-column-hue)
+6. [Group Faceting](#group-faceting)
+7. [SEM — Standard Error of the Mean](#sem--standard-error-of-the-mean)
+8. [Pre-computed SEM](#pre-computed-sem)
+9. [Reference Lines](#reference-lines)
+10. [Error Marker Annotations](#error-marker-annotations)
+11. [Plot Style Customization](#plot-style-customization)
+12. [Grid Management](#grid-management)
+13. [Project Save / Load](#project-save--load)
+14. [Export](#export)
+15. [Programmatic API](#programmatic-api)
+16. [CLI / Headless Export](#cli--headless-export)
 
 ---
 
@@ -53,6 +54,7 @@ Fill in the dialog:
 | y | Yes | Column for the y-axis |
 | Hue columns | No | Columns to use for color grouping (see [Hue](#hue-color-grouping)) |
 | SEM column | No | Column for error shading (see [SEM](#sem--standard-error-of-the-mean)) |
+| Data Filter | No | Expression selecting which rows to plot (see [Data Filtering](#data-filtering)) |
 | Pre-computed SEM | No | Check if SEM column contains pre-computed values |
 | Groups | No | Columns for faceting — creates one plot per combination |
 | Plot Style | No | Line, Markers, or both |
@@ -61,6 +63,53 @@ Fill in the dialog:
 Clicking OK places the plot(s) in the first available grid cell(s), expanding the grid as needed.
 
 **Automatic aggregation:** If multiple rows share the same (x, hue) pair, their y-values are averaged before plotting — producing clean single lines instead of overlapping scatter.
+
+---
+
+## Data Filtering
+
+**Access:** Create Plot dialog → "Data Filter (optional)"
+
+Restrict the rows used for a plot with a [pandas query](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.query.html)-style expression. The filter is applied **before** everything else, so group combinations, shared axis limits, hue categories, and SEM are all computed from the matching rows only.
+
+```text
+time >= 0 and C < 0.1
+(Country == "USA" or Country == "Canada") and not flag
+Country in ["USA", "Canada"]
+`Number of employees` > 1000
+Industry.str.contains("Tech", case=False)
+date >= "2024-01-01"
+date.dt.year == 2024
+score.notna()
+```
+
+While you type, the dialog shows how many rows match, explains errors (e.g. an unquoted text value), and warns about comparisons that would silently match nothing. The **Insert column** picker inserts a column name (backticked if needed) and shows sample values written the way the filter expects them.
+
+### Column types
+
+| Column type | Write values as | Notes |
+|-------------|-----------------|-------|
+| numeric | `n_features == 22`, `C < 0.1` | `n_features == "22"` matches nothing (warned). Float `==` is exact, so prefer `x.between(a, b)`. |
+| text | `Country == "USA"` | Unquoted `USA` is an error: values need quotes. Comparing text with `<`/`>` against a number is an error. |
+| text that looks numeric (e.g. `1, 2, 3, All`) | `Dim == "1"` | The CSV loader keeps the whole column as text, so `Dim == 1` matches nothing (warned). |
+| dates stored as text | `date >= "2024-01-01"`, `date.dt.year == 2024` | Date-like columns are compared as real dates, in any common format (`2024-01-05`, `1/5/2024`). The data itself is not changed. |
+| True/False | `flag`, `flag == True` | No quotes. |
+| missing values | `x.isna()`, `x.notna()` | Missing values fail every comparison, **except `!=`**, which keeps them. |
+
+Column names containing spaces or symbols must be wrapped in backticks: `` `Number of employees` ``.
+
+### Safety
+
+Filters are stored in `.ppo` files, which may come from someone else, so only comparisons, `and`/`or`/`not`, arithmetic, lists, and a small allowlist of column methods are accepted: `.str` (`contains`, `startswith`, `endswith`, `match`, `fullmatch`, `lower`, `upper`, `strip`, `len`), `.dt` (`year`, `month`, `day`, `hour`, `minute`, `dayofweek`, `date`), `isna`, `notna`, `between`, `isin`, `abs`, `round`, and math functions such as `abs()`/`log()`. `@variable` references, dunder attributes, and any other method calls are rejected.
+
+The filter is not shown in plot titles; hover over a plot to see it in a tooltip. To change a filter, clear the plot(s) and create them again.
+
+**Via API:**
+```python
+plot = create_plot(ds["id"], x="time", y="accuracy", data_filter="time >= 0 and fold != 3")
+plots = create_grouped_plots(ds["id"], "data.csv", x="time", y="accuracy",
+                             groups=["species"], data_filter='treatment == "drug"')
+```
 
 ---
 
@@ -275,6 +324,7 @@ Projects are stored as human-readable JSON with the `.ppo` extension. All plot p
       "sem_column": "fold",
       "sem_precomputed": false,
       "filter_query": { "experiment": "A" },
+      "data_filter": "time >= 0 and fold != 3",
       "hlines": [0, 50],
       "vlines": [10],
       "style_line": true,

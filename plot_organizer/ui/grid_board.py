@@ -19,6 +19,8 @@ from matplotlib.figure import Figure
 import pandas as pd
 from matplotlib.ticker import AutoMinorLocator
 
+from plot_organizer.services.filter_service import FilterError, apply_filters
+
 
 class PlotTile(QFrame):
     settings_requested = Signal(object)  # Emits self
@@ -35,6 +37,7 @@ class PlotTile(QFrame):
         self._sem_column: Optional[str] = None
         self._sem_precomputed: bool = False
         self._filter_query: Optional[dict] = None
+        self._data_filter: Optional[str] = None  # pandas query expression applied before filter_query
         self._hlines: list[float] = []
         self._vlines: list[float] = []
         self._style_line: bool = True
@@ -96,11 +99,14 @@ class PlotTile(QFrame):
         flip_axes: bool = False,
         xticks: Optional[list[float]] = None,
         yticks: Optional[list[float]] = None,
+        data_filter: Optional[str] = None,
     ) -> None:
         self._df, self._x, self._y, self._hue = df, x, y, hue
         self._sem_column = sem_column
         self._sem_precomputed = sem_precomputed
         self._filter_query = filter_query
+        self._data_filter = data_filter or None
+        self.setToolTip(f"Filter: {data_filter}" if data_filter else "")
         self._hlines = hlines or []
         self._vlines = vlines or []
         self._style_line = style_line
@@ -112,11 +118,14 @@ class PlotTile(QFrame):
         self._error_markers = error_markers or []
         self._flip_axes = flip_axes  # When True, Y is independent, X is dependent
         
-        # Apply filter if provided
-        plot_df = df.copy()  # Make a copy to avoid modifying original
-        if filter_query:
-            for col, val in filter_query.items():
-                plot_df = plot_df[plot_df[col] == val]
+        # Apply data filter and group filter (copy to avoid modifying original)
+        filter_error = None
+        try:
+            plot_df = apply_filters(df, data_filter, filter_query).copy()
+        except FilterError as e:
+            # e.g. a saved project whose CSV no longer has a filtered column
+            filter_error = str(e)
+            plot_df = df.iloc[0:0].copy()
         
         # Create composite hue column if hue is a list of columns
         actual_hue = None
@@ -141,7 +150,10 @@ class PlotTile(QFrame):
         else:
             ax = self.figure.subplots()
         
-        if plot_df.empty:
+        if filter_error:
+            ax.text(0.5, 0.5, f"Filter error:\n{filter_error}", ha='center', va='center',
+                    transform=ax.transAxes, color='red', fontsize='small', wrap=True)
+        elif plot_df.empty:
             ax.text(0.5, 0.5, "No data", ha='center', va='center', transform=ax.transAxes, alpha=0.3)
         elif actual_hue:
             # Group by hue and aggregate
@@ -529,6 +541,9 @@ class PlotTile(QFrame):
                     ylim=self._ylim,
                     error_markers=self._error_markers,
                     flip_axes=self._flip_axes,
+                    xticks=self._xticks,
+                    yticks=self._yticks,
+                    data_filter=self._data_filter,
                 )
     
     def clear_plot(self) -> None:
@@ -540,6 +555,8 @@ class PlotTile(QFrame):
         self._sem_column = None
         self._sem_precomputed = False
         self._filter_query = None
+        self._data_filter = None
+        self.setToolTip("")
         self._hlines = []
         self._vlines = []
         self._style_line = True
@@ -578,6 +595,7 @@ class PlotTile(QFrame):
             "sem_column": self._sem_column,
             "sem_precomputed": self._sem_precomputed,
             "filter_query": self._filter_query,
+            "data_filter": self._data_filter,
             "hlines": self._hlines,
             "vlines": self._vlines,
             "style_line": self._style_line,
@@ -627,6 +645,7 @@ class PlotTile(QFrame):
             flip_axes=plot_data.get("flip_axes", False),
             xticks=plot_data.get("xticks"),
             yticks=plot_data.get("yticks"),
+            data_filter=plot_data.get("data_filter"),
         )
 
 
