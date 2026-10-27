@@ -5,6 +5,51 @@ from typing import Any
 
 import pandas as pd
 
+COMPOSITE_HUE = "__composite_hue__"
+
+
+def add_hue_column(
+    df: pd.DataFrame, hue: str | list[str] | None
+) -> tuple[pd.DataFrame, str | None]:
+    """Resolve hue into a single column to group by.
+
+    A list of columns is combined into a temporary composite column with labels
+    like "Col1=val1, Col2=val2" (on a copy; df is not modified). Returns the
+    dataframe to use and the hue column name, or (df, None) when there is no hue.
+    """
+    if isinstance(hue, list):
+        if not hue:
+            return df, None
+        out = df.copy()
+        out[COMPOSITE_HUE] = out.apply(
+            lambda row: ", ".join(f"{col}={row[col]}" for col in hue), axis=1
+        ) if not out.empty else pd.Series(dtype=object)
+        return out, COMPOSITE_HUE
+    if isinstance(hue, str) and hue:
+        return df, hue
+    return df, None
+
+
+def hue_labels(df: pd.DataFrame, hue: str | list[str] | None) -> list[str]:
+    """Return the hue legend labels present in df, in the order groupby uses."""
+    df, actual_hue = add_hue_column(df, hue)
+    if actual_hue is None or df.empty:
+        return []
+    values = df[actual_hue].dropna().unique().tolist()
+    try:
+        values = sorted(values)
+    except TypeError:
+        values = sorted(values, key=str)
+    return [str(v) for v in values]
+
+
+def hue_color_map(labels: list[str]) -> dict[str, str]:
+    """Assign colours from the Matplotlib colour cycle to hue labels, in order."""
+    import matplotlib.pyplot as plt
+
+    cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    return {label: cycle[i % len(cycle)] for i, label in enumerate(labels)}
+
 
 def expand_groups(df: pd.DataFrame, groups: list[str]) -> list[dict[str, Any]]:
     """Return concrete equality filter dictionaries for the Cartesian product of group columns.
@@ -115,20 +160,7 @@ def shared_limits_with_sem(
     ymaxs: list[float] = []
     
     # Create composite hue column if hue is a list
-    df_to_use = df
-    actual_hue = None
-    if hue:
-        if isinstance(hue, list) and len(hue) > 0:
-            # Create composite column with format: Col1=val1, Col2=val2
-            df_to_use = df.copy()
-            composite_name = "__composite_hue__"
-            df_to_use[composite_name] = df_to_use.apply(
-                lambda row: ", ".join(f"{col}={row[col]}" for col in hue),
-                axis=1
-            )
-            actual_hue = composite_name
-        elif isinstance(hue, str):
-            actual_hue = hue
+    df_to_use, actual_hue = add_hue_column(df, hue)
     
     def add_limits(ind_min, ind_max, dep_min, dep_max):
         """Add limits to the correct axis based on flip_axes."""

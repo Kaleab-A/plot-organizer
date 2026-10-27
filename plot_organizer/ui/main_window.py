@@ -10,7 +10,7 @@ from plot_organizer.ui.grid_board import GridBoard, PlotTile
 from plot_organizer.ui.data_manager import DataManagerDock
 from plot_organizer.ui.dialogs import QuickPlotDialog, PlotSettingsDialog, ExportDialog
 from plot_organizer.services.load_service import load_csv_to_datasource
-from plot_organizer.services.plot_service import expand_groups, shared_limits
+from plot_organizer.services.plot_service import expand_groups, shared_limits, hue_labels, hue_color_map
 from plot_organizer.services.filter_service import FilterError, apply_data_filter, apply_filters
 from plot_organizer.services.export_service import export_grid
 from plot_organizer.services.project_service import save_workspace, load_workspace
@@ -213,8 +213,14 @@ class MainWindow(QMainWindow):
         # Expand limits to include reference lines (padding only for auto-computed)
         xlim, ylim = self._expand_limits_for_reference_lines(xlim, ylim, hlines, vlines, xlim_auto, ylim_auto)
         
+        # Grouped sets with hue share one colour map and show a single legend (on the
+        # first plot), listing every hue category in the set
+        hue_colors = None
+        if hue and len(filter_queries) > 1:
+            hue_colors = hue_color_map(hue_labels(filtered_df, hue))
+        
         # Place plots in grid
-        for fq in filter_queries:
+        for i, fq in enumerate(filter_queries):
             coord = self.grid_board.first_empty_coord()
             if coord is None:
                 self.grid_board.add_row()
@@ -248,6 +254,8 @@ class MainWindow(QMainWindow):
                 xticks=xticks,
                 yticks=yticks,
                 data_filter=data_filter,
+                show_legend=(i == 0) or not hue_colors,
+                hue_colors=hue_colors,
             )
             # Connect signals for new tiles
             tile.settings_requested.connect(self._on_tile_settings, Qt.UniqueConnection)

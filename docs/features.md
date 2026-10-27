@@ -149,6 +149,8 @@ Select one or more columns under "Groups" to create one plot per unique combinat
 
 **Titles:** Each plot is titled with its filter values, e.g., `Country=USA, Industry=Tech`.
 
+**Legend with hue:** A grouped set shows **one legend**, on its first plot, listing every hue category in the set — including categories missing from that particular plot. Each category keeps the same colour in every plot of the set, so the single legend applies to all of them. Right-click any plot → **Show Legend** to show or hide its legend (e.g. after moving or clearing the first plot).
+
 **Example:**
 - Groups: `Country` → creates one plot per country, all on the same y-scale.
 - Groups: `Country`, `Industry` → one plot per (country, industry) pair.
@@ -285,6 +287,8 @@ Style is applied uniformly across all hue categories and works with SEM shaded r
 
 **Reset Grid:** `Grid → Reset Grid…` — clears all plots and restores the default 2×3 layout. Requires confirmation; cannot be undone.
 
+**Show Legend** (right-click a plot with hue): toggle that plot's legend on or off.
+
 **Plot Settings** (right-click any tile → `Plot Settings…`):
 - Move a plot to a different position (swaps with the target cell; both plots must have the same span)
 - Change a plot's row/column span (multi-cell plots)
@@ -325,6 +329,8 @@ Projects are stored as human-readable JSON with the `.ppo` extension. All plot p
       "sem_precomputed": false,
       "filter_query": { "experiment": "A" },
       "data_filter": "time >= 0 and fold != 3",
+      "show_legend": true,
+      "hue_colors": { "model=a, dataset=x": "#1f77b4", "model=b, dataset=x": "#ff7f0e" },
       "hlines": [0, 50],
       "vlines": [10],
       "style_line": true,
@@ -397,7 +403,8 @@ save_project_file(project, "experiment.ppo")
 ### Grouped plots (replicates GUI faceting)
 
 ```python
-# Creates one plot per group combination with auto-computed shared y-limits
+# Creates one plot per group combination with auto-computed shared y-limits,
+# consistent hue colours, and a single legend on the first plot
 plots = create_grouped_plots(
     datasource_id=ds["id"],
     dataframe_path="data/results.csv",

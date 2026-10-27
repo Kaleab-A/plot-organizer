@@ -20,6 +20,8 @@ import pandas as pd
 from matplotlib.ticker import AutoMinorLocator
 
 from plot_organizer.services.filter_service import FilterError, apply_filters
+from plot_organizer.services.plot_service import add_hue_column
+from plot_organizer.services.render_service import draw_hue_legend
 
 
 class PlotTile(QFrame):
@@ -48,6 +50,8 @@ class PlotTile(QFrame):
         self._yticks: Optional[list[float]] = None  # Custom y-axis tick values
         self._error_markers: list[dict] = []
         self._flip_axes: bool = False  # When True, Y is independent, X is dependent
+        self._show_legend: bool = True
+        self._hue_colors: Optional[dict[str, str]] = None  # Shared label -> colour map for grouped sets
         self.setContextMenuPolicy(Qt.DefaultContextMenu)
 
         layout = QVBoxLayout(self)
@@ -72,6 +76,13 @@ class PlotTile(QFrame):
             markers_action = QAction("Manage Error Markers...", self)
             markers_action.triggered.connect(self._open_markers_dialog)
             menu.addAction(markers_action)
+            
+            if self._hue:
+                legend_action = QAction("Show Legend", self)
+                legend_action.setCheckable(True)
+                legend_action.setChecked(self._show_legend)
+                legend_action.toggled.connect(self._set_show_legend)
+                menu.addAction(legend_action)
             
             clear_action = QAction("Clear Plot", self)
             clear_action.triggered.connect(lambda: self.clear_requested.emit(self))
@@ -100,6 +111,8 @@ class PlotTile(QFrame):
         xticks: Optional[list[float]] = None,
         yticks: Optional[list[float]] = None,
         data_filter: Optional[str] = None,
+        show_legend: bool = True,
+        hue_colors: Optional[dict[str, str]] = None,
     ) -> None:
         self._df, self._x, self._y, self._hue = df, x, y, hue
         self._sem_column = sem_column
@@ -117,6 +130,8 @@ class PlotTile(QFrame):
         self._yticks = yticks  # Custom y-axis tick values
         self._error_markers = error_markers or []
         self._flip_axes = flip_axes  # When True, Y is independent, X is dependent
+        self._show_legend = show_legend
+        self._hue_colors = hue_colors or None
         
         # Apply data filter and group filter (copy to avoid modifying original)
         filter_error = None
@@ -127,21 +142,8 @@ class PlotTile(QFrame):
             filter_error = str(e)
             plot_df = df.iloc[0:0].copy()
         
-        # Create composite hue column if hue is a list of columns
-        actual_hue = None
-        if hue:
-            if isinstance(hue, list) and len(hue) > 0:
-                # Create composite column with format: Col1=val1, Col2=val2
-                composite_name = "__composite_hue__"
-                plot_df[composite_name] = plot_df.apply(
-                    lambda row: ", ".join(f"{col}={row[col]}" for col in hue),
-                    axis=1
-                )
-                actual_hue = composite_name
-            elif isinstance(hue, str):
-                # Single string hue (backward compatibility)
-                actual_hue = hue
-            # else: hue is empty list or None, actual_hue stays None
+        # Resolve hue (multiple columns become a composite "Col1=val1, Col2=val2" column)
+        plot_df, actual_hue = add_hue_column(plot_df, hue)
         
         # Reuse existing axes if available, otherwise create new one
         if self.figure.axes:
@@ -158,8 +160,12 @@ class PlotTile(QFrame):
         elif actual_hue:
             # Group by hue and aggregate
             for key, sub in plot_df.groupby(actual_hue):
-                self._plot_with_sem(ax, sub, x, y, sem_column, label=str(key))
-            ax.legend(loc="best", fontsize='small')
+                label = str(key)
+                color = self._hue_colors.get(label) if self._hue_colors else None
+                self._plot_with_sem(ax, sub, x, y, sem_column, label=label, color=color)
+            if self._show_legend:
+                # With a shared colour map, lists the whole grouped set's categories
+                draw_hue_legend(ax, self._hue_colors, self._style_line, self._style_marker)
         else:
             # No hue: aggregate duplicate values along independent axis
             self._plot_with_sem(ax, plot_df, x, y, sem_column)
@@ -212,8 +218,11 @@ class PlotTile(QFrame):
         else:
             return '-'   # Line only (default)
     
-    def _plot_with_sem(self, ax, df: pd.DataFrame, x: str, y: str, sem_column: Optional[str], label: Optional[str] = None) -> None:
+    def _plot_with_sem(self, ax, df: pd.DataFrame, x: str, y: str, sem_column: Optional[str], label: Optional[str] = None,
+                       color: Optional[str] = None) -> None:
         """Plot data with optional SEM shaded region.
+        
+        color: explicit colour (shared hue colour map); None uses the Matplotlib cycle.
         
         If sem_column is provided:
         - If pre-computed mode: Use SEM values directly from the column
@@ -235,7 +244,7 @@ class PlotTile(QFrame):
         if sem_column and sem_column in df.columns:
             if self._sem_precomputed:
                 # Pre-computed SEM mode: use values from column
-                self._plot_with_precomputed_sem(ax, df, x, y, sem_column, label)
+                self._plot_with_precomputed_sem(ax, df, x, y, sem_column, label, color)
             else:
                 # Computed SEM mode
                 # Step 1: Group by sem_column, then by independent axis, compute mean of dependent
@@ -248,19 +257,14 @@ class PlotTile(QFrame):
                 # Choose between error bars (markers only) or shaded region (with line)
                 if self._should_use_error_bars():
                     # Use error bars for each point
-                    import matplotlib.pyplot as plt
-                    color = plt.rcParams['axes.prop_cycle'].by_key()['color'][0]
-                    if label:
-                        # Get next color from cycle for different hue groups
-                        ax_colors = [line.get_color() for line in ax.lines]
-                        color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
-                        color = color_cycle[len(ax_colors) % len(color_cycle)]
+                    if color is None:
+                        color = self._next_cycle_color(ax, label)
                     self._plot_error_bars(ax, stats[ind_col].values, stats['mean_dep'].values,
                                          stats['sem_dep'].fillna(0).values, color, label)
                 else:
                     # Plot mean line with style
                     fmt = self._get_plot_format()
-                    line = self._plot_line(ax, stats[ind_col], stats['mean_dep'], fmt, label)
+                    line = self._plot_line(ax, stats[ind_col], stats['mean_dep'], fmt, label, color)
                     
                     # Plot SEM as shaded region
                     if stats['sem_dep'].notna().any():
@@ -273,19 +277,30 @@ class PlotTile(QFrame):
             # No SEM: just aggregate by independent axis and plot mean
             agg_df = df.groupby(ind_col, as_index=False)[dep_col].mean()
             fmt = self._get_plot_format()
-            self._plot_line(ax, agg_df[ind_col], agg_df[dep_col], fmt, label)
+            self._plot_line(ax, agg_df[ind_col], agg_df[dep_col], fmt, label, color)
     
-    def _plot_line(self, ax, ind_data, dep_data, fmt: str, label: Optional[str] = None):
+    def _plot_line(self, ax, ind_data, dep_data, fmt: str, label: Optional[str] = None, color: Optional[str] = None):
         """Plot line with coordinates based on flip_axes setting.
         
         Returns the Line2D object for color extraction.
         """
+        style = {"color": color} if color else {}
         if self._flip_axes:
             # X is dependent, Y is independent
-            return ax.plot(dep_data, ind_data, fmt, label=label)[0]
+            return ax.plot(dep_data, ind_data, fmt, label=label, **style)[0]
         else:
             # X is independent, Y is dependent (standard)
-            return ax.plot(ind_data, dep_data, fmt, label=label)[0]
+            return ax.plot(ind_data, dep_data, fmt, label=label, **style)[0]
+    
+    @staticmethod
+    def _next_cycle_color(ax, label: Optional[str]) -> str:
+        """Colour for error bars when no shared colour map is set."""
+        import matplotlib.pyplot as plt
+        color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        if not label:
+            return color_cycle[0]
+        # Get next color from cycle for different hue groups
+        return color_cycle[len(ax.lines) % len(color_cycle)]
     
     def _fill_sem(self, ax, ind_vals, lower, upper, color) -> None:
         """Fill SEM region based on flip_axes setting."""
@@ -323,7 +338,8 @@ class PlotTile(QFrame):
                 label=label, elinewidth=1.5
             )
     
-    def _plot_with_precomputed_sem(self, ax, df: pd.DataFrame, x: str, y: str, sem_column: str, label: Optional[str] = None) -> None:
+    def _plot_with_precomputed_sem(self, ax, df: pd.DataFrame, x: str, y: str, sem_column: str, label: Optional[str] = None,
+                                   color: Optional[str] = None) -> None:
         """Plot data with pre-computed SEM values from a column.
         
         If multiple rows exist for same independent axis value:
@@ -365,19 +381,14 @@ class PlotTile(QFrame):
         # Choose between error bars (markers only) or shaded region (with line)
         if self._should_use_error_bars():
             # Use error bars for each point
-            import matplotlib.pyplot as plt
-            color = plt.rcParams['axes.prop_cycle'].by_key()['color'][0]
-            if label:
-                # Get next color from cycle for different hue groups
-                ax_colors = [line.get_color() for line in ax.lines]
-                color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
-                color = color_cycle[len(ax_colors) % len(color_cycle)]
+            if color is None:
+                color = self._next_cycle_color(ax, label)
             self._plot_error_bars(ax, agg_df[ind_col].values, agg_df[dep_col].values,
                                  agg_df[sem_column].fillna(0).values, color, label)
         else:
             # Plot mean line with style
             fmt = self._get_plot_format()
-            line = self._plot_line(ax, agg_df[ind_col], agg_df[dep_col], fmt, label)
+            line = self._plot_line(ax, agg_df[ind_col], agg_df[dep_col], fmt, label, color)
             
             # Plot SEM as shaded region
             if agg_df[sem_column].notna().any():
@@ -517,34 +528,44 @@ class PlotTile(QFrame):
         if updated_markers is not None:
             # Update markers and refresh plot
             self._error_markers = updated_markers
-            # Re-render the plot with updated markers
-            if self._df is not None and self._x and self._y:
-                # Preserve the current title
-                title = None
-                if self.figure.axes:
-                    title = self.figure.axes[0].get_title() or None
-                
-                self.set_plot(
-                    df=self._df,
-                    x=self._x,
-                    y=self._y,
-                    hue=self._hue,
-                    sem_column=self._sem_column,
-                    sem_precomputed=self._sem_precomputed,
-                    title=title,
-                    filter_query=self._filter_query,
-                    hlines=self._hlines,
-                    vlines=self._vlines,
-                    style_line=self._style_line,
-                    style_marker=self._style_marker,
-                    xlim=self._xlim,
-                    ylim=self._ylim,
-                    error_markers=self._error_markers,
-                    flip_axes=self._flip_axes,
-                    xticks=self._xticks,
-                    yticks=self._yticks,
-                    data_filter=self._data_filter,
-                )
+            self._rerender()
+    
+    def _set_show_legend(self, show: bool) -> None:
+        """Toggle the hue legend on this plot (right-click → Show Legend)."""
+        self._show_legend = show
+        self._rerender()
+    
+    def _rerender(self) -> None:
+        """Redraw the plot from its stored settings, keeping the current title."""
+        if self._df is None or not self._x or not self._y:
+            return
+        title = None
+        if self.figure.axes:
+            title = self.figure.axes[0].get_title() or None
+        
+        self.set_plot(
+            df=self._df,
+            x=self._x,
+            y=self._y,
+            hue=self._hue,
+            sem_column=self._sem_column,
+            sem_precomputed=self._sem_precomputed,
+            title=title,
+            filter_query=self._filter_query,
+            hlines=self._hlines,
+            vlines=self._vlines,
+            style_line=self._style_line,
+            style_marker=self._style_marker,
+            xlim=self._xlim,
+            ylim=self._ylim,
+            error_markers=self._error_markers,
+            flip_axes=self._flip_axes,
+            xticks=self._xticks,
+            yticks=self._yticks,
+            data_filter=self._data_filter,
+            show_legend=self._show_legend,
+            hue_colors=self._hue_colors,
+        )
     
     def clear_plot(self) -> None:
         """Clear the plot data and reset to empty state."""
@@ -567,6 +588,8 @@ class PlotTile(QFrame):
         self._yticks = None
         self._error_markers = []
         self._flip_axes = False
+        self._show_legend = True
+        self._hue_colors = None
         self.figure.clear()
         self.canvas.draw_idle()
     
@@ -607,6 +630,8 @@ class PlotTile(QFrame):
             "title": title,
             "error_markers": self._error_markers,
             "flip_axes": self._flip_axes,
+            "show_legend": self._show_legend,
+            "hue_colors": self._hue_colors,
         }
     
     def set_plot_from_data(self, df: pd.DataFrame, plot_data: dict) -> None:
@@ -646,6 +671,8 @@ class PlotTile(QFrame):
             xticks=plot_data.get("xticks"),
             yticks=plot_data.get("yticks"),
             data_filter=plot_data.get("data_filter"),
+            show_legend=plot_data.get("show_legend", True),
+            hue_colors=plot_data.get("hue_colors"),
         )
 
 
