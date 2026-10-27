@@ -10,6 +10,8 @@ import pandas as pd
 from matplotlib.ticker import AutoMinorLocator
 
 from plot_organizer.services.filter_service import FilterError, apply_filters
+from plot_organizer.services.plot_service import add_hue_column
+from plot_organizer.services.render_service import draw_hue_legend
 
 if TYPE_CHECKING:
     from plot_organizer.ui.grid_board import GridBoard, PlotTile
@@ -114,12 +116,20 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
                 transform=ax.transAxes, color='red', fontsize='small', wrap=True)
 
     # Helper functions for plotting with flip_axes support
-    def plot_line(ind_data, dep_data, fmt_str, label=None):
+    def plot_line(ind_data, dep_data, fmt_str, label=None, color=None):
         """Plot line with coordinates based on flip_axes setting."""
+        style = {"color": color} if color else {}
         if flip_axes:
-            return ax.plot(dep_data, ind_data, fmt_str, label=label)[0]
+            return ax.plot(dep_data, ind_data, fmt_str, label=label, **style)[0]
         else:
-            return ax.plot(ind_data, dep_data, fmt_str, label=label)[0]
+            return ax.plot(ind_data, dep_data, fmt_str, label=label, **style)[0]
+    
+    def next_cycle_color(label):
+        """Colour for error bars when no shared colour map is set."""
+        color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        if not label:
+            return color_cycle[0]
+        return color_cycle[len(ax.lines) % len(color_cycle)]
     
     def fill_sem(ind_vals, lower, upper, color):
         """Fill SEM region based on flip_axes setting."""
@@ -143,7 +153,7 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
     use_error_bars = style_marker and not style_line
     
     # Helper function to plot with SEM (same logic as PlotTile._plot_with_sem)
-    def plot_with_sem(data, label=None):
+    def plot_with_sem(data, label=None, color=None):
         if sem_column and sem_column in data.columns:
             if sem_precomputed:
                 # Pre-computed SEM: aggregate by independent column
@@ -154,15 +164,12 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
                 
                 if use_error_bars:
                     # Use error bars for each point
-                    color = plt.rcParams['axes.prop_cycle'].by_key()['color'][0]
-                    if label:
-                        ax_colors = [line.get_color() for line in ax.lines]
-                        color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
-                        color = color_cycle[len(ax_colors) % len(color_cycle)]
+                    if color is None:
+                        color = next_cycle_color(label)
                     plot_error_bars(agg_data[ind_col].values, agg_data[dep_col].values,
                                    agg_data[sem_column].fillna(0).values, color, label)
                 else:
-                    line = plot_line(agg_data[ind_col], agg_data[dep_col], fmt, label)
+                    line = plot_line(agg_data[ind_col], agg_data[dep_col], fmt, label, color)
                     
                     if agg_data[sem_column].notna().any():
                         color = line.get_color()
@@ -181,15 +188,12 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
                 
                 if use_error_bars:
                     # Use error bars for each point
-                    color = plt.rcParams['axes.prop_cycle'].by_key()['color'][0]
-                    if label:
-                        ax_colors = [line.get_color() for line in ax.lines]
-                        color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
-                        color = color_cycle[len(ax_colors) % len(color_cycle)]
+                    if color is None:
+                        color = next_cycle_color(label)
                     plot_error_bars(stats[ind_col].values, stats['mean_dep'].values,
                                    stats['sem_dep'].fillna(0).values, color, label)
                 else:
-                    line = plot_line(stats[ind_col], stats['mean_dep'], fmt, label)
+                    line = plot_line(stats[ind_col], stats['mean_dep'], fmt, label, color)
                     
                     if stats['sem_dep'].notna().any():
                         color = line.get_color()
@@ -201,13 +205,17 @@ def _render_plot_to_ax(tile: "PlotTile", ax) -> None:
                         )
         else:
             agg_data = data.groupby(ind_col, as_index=False)[dep_col].mean()
-            plot_line(agg_data[ind_col], agg_data[dep_col], fmt, label)
+            plot_line(agg_data[ind_col], agg_data[dep_col], fmt, label, color)
     
-    # Apply aggregation with SEM
-    if hue:
-        for key, sub in plot_df.groupby(hue):
-            plot_with_sem(sub, label=str(key))
-        ax.legend(loc="best", fontsize='small')
+    # Apply aggregation with SEM (same hue labels and colours as PlotTile)
+    plot_df, actual_hue = add_hue_column(plot_df, hue)
+    hue_colors = getattr(tile, "_hue_colors", None)
+    if actual_hue:
+        for key, sub in plot_df.groupby(actual_hue):
+            label = str(key)
+            plot_with_sem(sub, label=label, color=hue_colors.get(label) if hue_colors else None)
+        if getattr(tile, "_show_legend", True):
+            draw_hue_legend(ax, hue_colors, style_line, style_marker)
     else:
         plot_with_sem(plot_df)
     

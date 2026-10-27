@@ -16,10 +16,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - `create_plot()` / `create_grouped_plots()` accept `data_filter=`.
 - `services/filter_service.py` with `apply_data_filter()`, `apply_filters()`, `column_kind()` and `filter_warnings()`.
 
+### Changed
+- **Single legend for grouped plots** ([#1](https://github.com/Kaleab-A/plot-organizer/issues/1)): a grouped set with hue shows one legend, on its first plot, listing every hue category in the set. Right-click a plot → **Show Legend** to toggle any plot's legend. Saved as `show_legend` / `hue_colors` in `.ppo` files; older projects keep a legend on every plot.
+
 ### Fixed
 - Editing error markers no longer drops custom x/y tick values from the plot.
+- Hue colours are now consistent across a grouped set: previously a category could change colour in plots where another category was missing.
+- Exported legends for multi-column hue now use the same `Col=value, …` labels as the app (they showed tuples).
 
 ### Tests
+- `test_grouped_legend.py`: 23 tests for the single legend, shared hue colours (lines, SEM fills, error bars), the legend toggle, save/load, export and the API.
 - `test_data_filter.py`: 55 tests covering column types, operators, dates, error messages, rejected expressions, lint warnings, tiles, save/load, export, the dialog and the API.
 
 ---

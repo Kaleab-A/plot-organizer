@@ -84,6 +84,8 @@ def create_plot(
     error_markers: list[dict[str, Any]] | None = None,
     flip_axes: bool = False,
     data_filter: str | None = None,
+    show_legend: bool = True,
+    hue_colors: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Create a plot descriptor.
     
@@ -105,6 +107,10 @@ def create_plot(
         data_filter: pandas query expression applied before filter_query, e.g.
             'time >= 0 and Country in ["USA", "Canada"]'. Quote text values and wrap
             column names containing spaces in backticks. See docs/features.md.
+        show_legend: Draw the hue legend on this plot (default: True)
+        hue_colors: Map of hue label -> colour, shared across a grouped set so the
+            same category has the same colour in every plot. None uses the default
+            colour cycle.
         hlines: List of y-values for horizontal reference lines
         vlines: List of x-values for vertical reference lines
         style_line: Show lines (default: True)
@@ -157,6 +163,8 @@ def create_plot(
         "sem_precomputed": sem_precomputed,
         "filter_query": filter_query,
         "data_filter": data_filter,
+        "show_legend": show_legend,
+        "hue_colors": hue_colors,
         "hlines": hlines or [],
         "vlines": vlines or [],
         "style_line": style_line,
@@ -318,7 +326,8 @@ def create_grouped_plots(
     
     This replicates the GUI's "groups" feature, where plots are created for
     each unique combination of group column values and automatically share
-    axis limits.
+    axis limits. With hue, all plots share one colour map and only the first
+    plot shows the legend.
     
     Args:
         datasource_id: ID of the datasource
@@ -366,7 +375,9 @@ def create_grouped_plots(
         >>> # Creates one plot per (species, treatment) combination
         >>> # All plots share the same auto-computed axis limits
     """
-    from plot_organizer.services.plot_service import expand_groups, shared_limits, shared_limits_with_sem
+    from plot_organizer.services.plot_service import (
+        expand_groups, shared_limits, shared_limits_with_sem, hue_labels, hue_color_map,
+    )
     from plot_organizer.services.filter_service import apply_data_filter, apply_filters
     
     # Load dataframe to compute limits.
@@ -406,6 +417,11 @@ def create_grouped_plots(
     computed_xlim, computed_ylim = _expand_limits_for_reference_lines(
         computed_xlim, computed_ylim, hlines, vlines, xlim_auto, ylim_auto
     )
+    
+    # Grouped sets with hue share one colour map and show a single legend
+    hue_colors = None
+    if hue and len(filter_queries) > 1:
+        hue_colors = hue_color_map(hue_labels(df, hue))
     
     # Create plots with auto-positioning
     plots = []
@@ -448,6 +464,8 @@ def create_grouped_plots(
             error_markers=error_markers,
             flip_axes=flip_axes,
             data_filter=data_filter,
+            show_legend=(i == 0) or not hue_colors,
+            hue_colors=hue_colors,
         )
         plots.append(plot)
     

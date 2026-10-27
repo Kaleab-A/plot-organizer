@@ -41,3 +41,34 @@ def render_line_plot(
     return fig, ax
 
 
+def draw_hue_legend(
+    ax,
+    hue_colors: Optional[dict[str, str]] = None,
+    style_line: bool = True,
+    style_marker: bool = False,
+) -> None:
+    """Draw the hue legend on ax.
+
+    With a shared hue_colors map (grouped plot sets), the legend lists every
+    label in the map, including categories absent from this subplot, so one
+    legend can describe the whole set. Without a map, the legend is built from
+    the artists drawn on ax.
+    """
+    if not hue_colors:
+        ax.legend(loc="best", fontsize="small")
+        return
+
+    from matplotlib.lines import Line2D
+
+    show_marker = style_marker or not style_line
+    handles = [
+        Line2D(
+            [], [],
+            color=color,
+            linestyle="-" if style_line else "none",
+            marker="o" if show_marker else None,
+            label=label,
+        )
+        for label, color in hue_colors.items()
+    ]
+    ax.legend(handles=handles, loc="best", fontsize="small")
